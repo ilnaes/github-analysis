@@ -1,0 +1,30 @@
+```{r}
+library(tidyverse)
+library(tidytext)
+library(skimr)
+library(stopwords)
+```
+
+```{r}
+df <- read_csv("clean.csv")
+skim(df)
+```
+
+```{r}
+
+df |>
+  filter(!is.na(language)) |>
+  group_by(language) |>
+  slice_max(order_by = stargazers_count, n = 10) |>
+  arrange(desc(stargazers_count)) |>
+  mutate(n = 1:10) |>
+  ggplot(aes(n, stargazers_count)) +
+  geom_line() +
+  expand_limits(ymin = 0) +
+  facet_wrap(vars(language), scales = "free_y")
+
+df |>
+  select(language, full_name, description, stargazers_count) |>
+  unnest_tokens(word, description) |>
+  anti_join(stop_words)
+```

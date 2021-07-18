@@ -1,0 +1,168 @@
+```{r}
+library(tidyverse)
+library(tidymodels)
+library(tidytext)
+library(textrecipes)
+```
+
+```{r}
+df <- read_csv('data/clean.csv') |> 
+  mutate(stars = log(stars),
+         description = ifelse(is.na(description, "MISSING", description)))
+```
+
+We now do a more in-depth analysis of repo descriptions.
+
+```{r}
+word_count <- df |> 
+  mutate(nwords = str_count(description, "\\w+"))
+
+word_count |> 
+  ggplot(aes(nwords)) +
+  scale_x_log10() + 
+  geom_histogram()
+```
+
+Word count is very skewed.
+
+```{r}
+word_count |> 
+  arrange(-nwords) |> 
+  head(10) |> 
+  pluck("description")
+```
+
+It looks like many wordy descriptions contain Chinese (with some mixed in English usually).  Since we want to do an English-based analysis, we will strip out all non-English words.
+
+```{r}
+df <- df |> 
+  mutate(description = str_replace_all(description, "[^A-Za-z0-9\\s'-\\.]", " "),
+         description = str_replace_all(description, "\\s+", " "),
+         nwords = str_count(description, "\\w+"))
+
+word_count <- df |> 
+  mutate(nwords = str_count(description, "\\w+"))
+```
+
+Let's see if word count has any correlation with stars.
+
+```{r}
+word_count |> 
+  ggplot(aes(nwords, stars)) +
+  scale_x_log10() +
+  geom_point() +
+  facet_wrap(vars(language), scales = "free")
+```
+
+Not really.
+
+## Word analysis
+
+We first tokenize words.  Let's look at most popular words.
+
+```{r}
+word_list <- df |> 
+  unnest_tokens(word, description) |> 
+  anti_join(stop_words)
+
+word_list |> 
+  count(word) |> 
+  arrange(-n)
+```
+
+Let's see if this changes by language.  Let's just look at top 5
+
+```{r}
+word_list |> 
+  count(word, language) |> 
+  group_by(language) |> 
+  slice_max(n, n = 5) |> 
+  ggplot(aes(n, word)) +
+  geom_col() +
+  facet_wrap(vars(language), scales = "free")
+```
+
+Nothing surprising here.  Note that the pairs (js, ts) and (py, ipynb) are pretty similar, as to be expected.
+
+### Clustering
+
+Given how nicely topics seem to appear from the most popular words, let's try some correlation and clustering.
+
+Let's first see how often pairs of words appear together in a description.
+
+```{r}
+pairs <- df |> 
+  select(full_name, language, description) |> 
+  mutate(d1 = description) |> 
+  unnest_tokens(word1, description) |> 
+  anti_join(stop_words, by = c("word1" = "word")) |> 
+  distinct(full_name, language, d1, word1) |> 
+  unnest_tokens(word2, d1) |>
+  anti_join(stop_words, by = c("word2" = "word")) |>
+  distinct(full_name, language, word1, word2) |> 
+  filter(word1 < word2) |> 
+  select(-full_name)
+
+pairs |> 
+  count(word1, word2) |> 
+  arrange(-n)
+```
+
+Let's now look at bigrams by language.
+
+```{r}
+pairs |> 
+  unite("bigram", word1:word2) |> 
+  group_by(language) |> 
+  count(bigram) |> 
+  slice_max(n, n = 5) |> 
+  ggplot(aes(n, bigram)) +
+  geom_col() +
+  facet_wrap(vars(language), scales = "free")
+```
+
+Let's look at a correlation graph.  We will throw out "library" because that's basically a stop word on Github.  We then assign each pair to the language that uses it the most.
+
+```{r}
+pairs_count <- pairs |>
+  filter(word1 != "library", word2 != 'library') |> 
+  group_by(language, word1, word2) |> 
+  summarize(lang_count = n()) |> 
+  group_by(word1, word2) |> 
+  mutate(n = sum(lang_count)) |> 
+  filter(n >= 5) |> 
+  slice_max(lang_count, n = 1) |> 
+  ungroup() |> 
+  select(-lang_count)
+```
+
+We now plot the pairs graph.  We throw out some languages to make the colors more differentiable. Some tuning shows that 20-25 is best.
+
+N.B. The graph could look different as ggraph has some randomness.
+
+```{r}
+library(igraph)
+library(ggraph)
+
+pairs_count |> 
+  filter(n >= 23,
+         language %in% c("R", "Python", "JavaScript", "Go", "C", "C++", "Java")) |>
+  relocate(language, .after = word2) |> 
+  graph_from_data_frame() |> 
+  ggraph(layout = "fr") +
+  geom_edge_link(aes(color = language)) +
+  geom_node_point() +
+  geom_node_text(aes(label = name), vjust = 1, hjust = 1)
+```
+
+```{r}
+```
+
+
+
+
+
+
+
+
+

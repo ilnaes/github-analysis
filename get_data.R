@@ -77,10 +77,10 @@ dfs <- languages |>
 
 dfs |>
   bind_rows() |>
-  write_csv("raw.csv")
+  write_csv("data/raw.csv")
 
-read_csv("raw.csv") |>
+read_csv("data/raw.csv") |>
   mutate(language = ifelse(language == "MATLAB" | is.na(language), "Matlab", language)) |>
   select(-ends_with("url"), -node_id, -private, -fork, -disabled, -score, -stargazers_count, -watchers_count, -permissions) |>
   rename(stars = watchers) |> 
-  write_csv("clean.csv")
+  write_csv("data/clean.csv")

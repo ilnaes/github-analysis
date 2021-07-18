@@ -9,7 +9,7 @@ library(forcats)
 ```
 
 ```{r}
-df <- read_csv("clean.csv")
+df <- read_csv("data/clean.csv")
 skim(df)
 names(df)
 ```

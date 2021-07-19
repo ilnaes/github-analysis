@@ -70,17 +70,17 @@ get_tibble <- function(response) {
     bind_rows()
 }
 
-languages <- c("python", "js", "java", "go", "typescript", "cpp", "c", "matlab", "r", "jupyter-notebook")
+languages <- c("python", "js", "java", "c", "r")
 
 dfs <- languages |>
-  map(\(x) get_tibble(get_repos(x, n = 1000)))
+  map(\(x) get_tibble(get_repos(x, n = 2000)))
 
 dfs |>
   bind_rows() |>
   write_csv("data/raw.csv")
 
 read_csv("data/raw.csv") |>
-  mutate(language = ifelse(language == "MATLAB" | is.na(language), "Matlab", language)) |>
+  filter(language != "CoffeeScript") |> 
   select(-ends_with("url"), -node_id, -private, -fork, -disabled, -score, -stargazers_count, -watchers_count, -permissions) |>
   rename(stars = watchers) |> 
   write_csv("data/clean.csv")

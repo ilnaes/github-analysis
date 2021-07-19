@@ -1,4 +1,8 @@
-```{r}
+```{r, include = FALSE}
+knitr::opts_chunk$set(warning=FALSE)
+```
+
+```{r, message=FALSE}
 library(tidyverse)
 library(tidytext)
 library(skimr)
@@ -8,13 +12,12 @@ library(corrr)
 library(forcats)
 ```
 
-```{r}
+```{r, message=FALSE}
 df <- read_csv("data/clean.csv")
-skim(df)
-names(df)
 ```
 
 Fields of interest:
+
 * owner
 * created_at
 * language
@@ -32,7 +35,7 @@ All analyses should be faceted by language.
 
 Let's look at stars
 
-```{r}
+```{r, }
 df |>
   ggplot(aes(stars)) +
   geom_density() +
@@ -49,7 +52,7 @@ df |>
   geom_boxplot()
 ```
 
-About what you would expect for the Github crowd.  Web friendly languages on top, scientific computing on bottom.
+About what you would expect for the Github crowd.  Web friendly languages on top, R on bottom.
 
 List of the most popular projects (under 100000 stars):
 
@@ -70,13 +73,13 @@ df |>
   facet_wrap(vars(language), scales = "free")
 ```
 
-Also skewed, but log transform seems to be sufficient.  There were some two repos with size 0:
+Also skewed, but log transform seems to be sufficient.  There is one repo with size 0:
 
 ```{r}
 df |> filter(size == 0)
 ```
 
-One was removed due to regulation and one was probably an error since nuwa is there.
+This is probably an error since nuwa is there.
 
 Let's look at created_at:
 
@@ -98,7 +101,7 @@ df |>
   facet_wrap(vars(language), scales = "free")
 ```
 
-The scientific computation languages are different from the general programming languages in that they have more projects with less (or 0) issues.  This makes sense as analyses do not typically generate issues.
+R is different from the general programming languages in that they have more projects with less (or 0) issues.
 
 We now log transform stars, size, and open issues for the future:
 
@@ -131,7 +134,7 @@ log_df |>
   facet_wrap(vars(language), scales = "free")
 ```
 
-Organizations tend to have more stars.  This is especially pronounced in C++ and Typescript.  Visually, it looks less pronounced in Matlab and R.
+Organizations tend to have more stars.  Visually, it looks less pronounced in R.
 
 ```{r}
 df |>
@@ -167,7 +170,7 @@ lump_lic |>
   geom_col(aes(fill = owner), position = "dodge")
 ```
 
-Users are far more likely to have no license or use MIT
+Users are far more likely to have no license or use MIT and organizations are more likely to use more exotic licenses.
 
 ```{r}
 lump_lic |>
@@ -185,11 +188,11 @@ lump_lic |>
   expand_limits(xmin = 0)
 ```
 
-License has some weak correspondence with popularity, although *not* having a license seems to have a stronger correspondence to having low popularity.
+License has some weak correspondence with popularity, although having an exotic license or *not* having a license seems to have a stronger correspondence to having low popularity.
 
 ```{r}
 log_df |>
-  ggplot(aes(size, stars)) +
+  ggplot(aes(open_issues_count, stars)) +
   geom_point() +
   facet_wrap(vars(language), scales = "free")
 

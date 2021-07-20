@@ -266,8 +266,8 @@ folds <- vfold_cv(train, v = 5)
 
 mset <- metric_set(mn_log_loss, accuracy)
 control <- control_grid(save_workflow = TRUE,
-                        save_pred = TRUE,
-                        extract = extract_model,
+                        # save_pred = TRUE,
+                        # extract = extract_model,
                         verbose = TRUE)
 ```
 
@@ -276,12 +276,17 @@ res <- cos_workflow |>
   tune_grid(folds,
             metrics = mset,
             control = control,
-            grid = crossing(neighbors = c(14, 17, 20, 23),
-                            max_tokens = c(200, 250, 300)),
+            grid = crossing(neighbors = c(28),
+                            max_tokens = c(150)),
             )
+
+# save(res, file = "res.RData")
 ```
 
+Parameters come from tuning
+
 ```{r}
+# load("res.RData")
 autoplot(res)
 ```
 
@@ -290,13 +295,11 @@ final_model <- cos_workflow |>
   finalize_workflow(select_best(res, metric = "accuracy")) |> 
   fit(train)
 
-final_model |> 
-  augment() |> 
-  select(starts_with(".pred"), language)
+preds <- final_model |> 
+  augment(test)
 
-test |> 
-  head(5) |> 
-  pluck("description")
+preds |> 
+  mutate(acc = .pred_class == language) |> 
+  group_by(language) |> 
+  summarize(mean(acc))
 ```
-
-

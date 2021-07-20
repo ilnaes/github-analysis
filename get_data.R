@@ -7,9 +7,9 @@ token <- Sys.getenv("TOKEN")
 
 GET("https://api.github.com/rate_limit", add_headers(Authorization = paste("token", token)))
 
-gh_search <- function(lang, stars = 99999, auth = token) {
+gh_search <- function(lang, stars = 99999, page = 1, auth = token) {
   endpoint <- "https://api.github.com/search/repositories"
-  query <- paste0("?q=stars:<=", stars, "+language:", lang, "&sort=stars&order=desc&per_page=100")
+  query <- paste0("?q=stars:<=", stars, "+language:", lang, "&sort=stars&order=desc&per_page=100&page=", page)
   token <- add_headers(Authorization = paste("token", auth))
 
   GET(paste0(endpoint, query), token)
@@ -29,26 +29,31 @@ get_repos <- function(lang, n = 1000, stars = 99999, min = 10) {
   res <- list()
 
   while (TRUE) {
-    response <- gh_search(lang, stars)
-    response <- extract_repos(response)
+    p <- 1
+    
+    while (p <= 10) {
+      response <- gh_search(lang, stars, p)
+      response <- extract_repos(response)
+  
+      if (is.null(response)) {
+        print("BAD")
+        Sys.sleep(10)
+        next
+      }
 
-    if (is.null(response)) {
-      print("BAD")
-      Sys.sleep(10)
-      next
+      res <- c(res, response)
+      print(paste0(length(res), ":", p, " --- ", response[length(response)][[1]]$stargazers_count))
+  
+      if (length(response) < 100 || length(res) >= n || stars < min) {
+        return(res)
+      }
+      
+      p <- p + 1
+      Sys.sleep(1.2)
     }
-
-    res <- c(res, response)
+    
     stars <- response[length(response)][[1]]$stargazers_count - 1
-    print(paste(length(res), "---", stars))
-
-    if (length(response) < 100 || length(res) >= n || stars < min) {
-      break
-    }
-    Sys.sleep(1.2)
   }
-
-  res
 }
 
 get_tibble <- function(response) {
@@ -71,9 +76,9 @@ get_tibble <- function(response) {
 }
 
 languages <- c("python", "js", "java", "c", "r")
+num <- c(4000, 4000, 4000, 4000, 4000)
 
-dfs <- languages |>
-  map(\(x) get_tibble(get_repos(x, n = 2000)))
+dfs <- map(languages, num, \(x, y) get_tibble(get_repos(x, n = y)))
 
 dfs |>
   bind_rows() |>

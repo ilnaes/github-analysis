@@ -30,11 +30,11 @@ get_repos <- function(lang, n = 1000, stars = 99999, min = 10) {
 
   while (TRUE) {
     p <- 1
-    
+
     while (p <= 10) {
       response <- gh_search(lang, stars, p)
       response <- extract_repos(response)
-  
+
       if (is.null(response)) {
         print("BAD")
         Sys.sleep(10)
@@ -43,15 +43,15 @@ get_repos <- function(lang, n = 1000, stars = 99999, min = 10) {
 
       res <- c(res, response)
       print(paste0(length(res), ":", p, " --- ", response[length(response)][[1]]$stargazers_count))
-  
+
       if (length(response) < 100 || length(res) >= n || stars < min) {
         return(res)
       }
-      
+
       p <- p + 1
       Sys.sleep(1.2)
     }
-    
+
     stars <- response[length(response)][[1]]$stargazers_count - 1
   }
 }
@@ -78,11 +78,13 @@ get_tibble <- function(response) {
 languages <- c("python", "js", "java", "c", "r")
 num <- c(4000, 4000, 4000, 4000, 4000)
 
-dfs <- map2(languages, num,
-            \(x, y)
-            get_tibble(get_repos(x, n = y)) |> 
-              distinct(full_name, .keep_all = TRUE) |> 
-              mutate(language = x))
+dfs <- map2(
+  languages, num,
+  \(x, y)
+  get_tibble(get_repos(x, n = y)) |>
+    distinct(full_name, .keep_all = TRUE) |>
+    mutate(language = x)
+)
 
 dfs |>
   bind_rows() |>
@@ -90,5 +92,5 @@ dfs |>
 
 read_csv("data/raw.csv") |>
   select(-ends_with("url"), -node_id, -private, -fork, -disabled, -score, -stargazers_count, -watchers_count, -permissions) |>
-  rename(stars = watchers) |> 
+  rename(stars = watchers) |>
   write_csv("data/clean.csv")

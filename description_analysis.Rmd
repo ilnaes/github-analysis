@@ -4,7 +4,7 @@ library(tidymodels)
 library(tidytext)
 library(textrecipes)
 
-doParallel::registerDoParallel(cores = 3)
+# doParallel::registerDoParallel(cores = 3)
 ```
 
 ```{r}
@@ -59,7 +59,17 @@ word_count |>
 
 Not really.
 
-## Word analysis
+```{r}
+word_count |>
+  ggplot(aes(nwords)) +
+  geom_density() +
+  scale_x_log10() +
+  facet_grid(rows = vars(language))
+```
+
+Word count also doesn't seem to be highly correlated with language although R might have slightly shorter descriptions.
+
+# Word analysis
 
 We first tokenize words.  Let's look at most popular words.
 
@@ -156,10 +166,10 @@ pairs_count |>
   geom_node_text(aes(label = name), vjust = 1, hjust = 1)
 ```
 
-# Visualizations
+# Dimension reduction
 
 ```{r}
-cos_rec <- recipe(language ~ description + nwords, data = word_count) |>
+master_rec <- recipe(language ~ description + nwords, data = word_count) |>
   step_filter(nwords >= 2, skip = TRUE) |>
   step_rm(nwords) |>
   step_tokenize(description) |>
@@ -169,7 +179,7 @@ cos_rec <- recipe(language ~ description + nwords, data = word_count) |>
 ```
 
 ```{r}
-prepped_df <- cos_rec |>
+prepped_df <- master_rec |>
   prep() |>
   juice() |>
   add_count(across(where(is.numeric))) |>
@@ -187,7 +197,9 @@ pca_df$x |>
   as_tibble() |>
   bind_cols(select(prepped_df, language)) |>
   ggplot(aes(PC1, PC2)) +
-  geom_point(aes(color = language), alpha = 0.5)
+  geom_point(aes(color = language), alpha = 0.5) +
+  xlim(-4, 8) +
+  ylim(-2, 2.2)
 ```
 
 t-SNE plot
@@ -224,99 +236,4 @@ umap_df$layout |>
   ylim(-5, 4)
 ```
 
-# Modeling
-
-We will try to construct a model that predicts which matches a description to a language.  We will use a KNN model with cosine similarity as a metric.
-
-```{r}
-cos_rec <- recipe(language ~ description, data = df) |>
-  step_mutate(
-    description = str_replace_all(description, "[^\\x00-\\x7F]", " "),
-    description = str_replace_all(description, "\\s+", " "),
-    nwords = str_count(description, "\\w+")
-  ) |>
-  step_filter(nwords >= 2, skip = TRUE) |>
-  step_rm(nwords) |>
-  step_tokenize(description) |>
-  step_stopwords(description) |>
-  step_tokenfilter(description, max_tokens = tune()) |>
-  step_tfidf(description)
-
-cos_model <- nearest_neighbor(
-  mode = "classification",
-  neighbors = tune(),
-  weight_func = "cos"
-) |>
-  set_engine("kknn")
-
-cos_workflow <- workflow() |>
-  add_recipe(cos_rec) |>
-  add_model(cos_model)
-```
-
-```{r}
-set.seed(54321)
-
-split <- initial_split(df, strata = "language", prop = 0.8)
-train <- training(split)
-test <- testing(split)
-folds <- vfold_cv(train, v = 5)
-
-mset <- metric_set(mn_log_loss, accuracy)
-control <- control_grid(
-  save_workflow = TRUE,
-  # save_pred = TRUE,
-  # extract = extract_model,
-  verbose = TRUE
-)
-```
-
-```{r}
-res <- cos_workflow |>
-  tune_grid(folds,
-    metrics = mset,
-    control = control,
-    grid = crossing(
-      neighbors = floor(seq(50, 250, length.out = 50)),
-      max_tokens = floor(seq(50, 350, length.out = 50)),
-    )
-  )
-
-res <- saveRDS(res, "res.rds")
-```
-
-Parameters come from tuning
-
-```{r}
-res <- readRDS("res.rds")
-
-res |>
-  collect_metrics() |>
-  filter(.metric == "accuracy") |>
-  arrange(-mean)
-
-autoplot(res)
-```
-
-* Best: 0.528
-* neighbors: 100
-* max_tokens: 125
-
-```{r}
-final_model <- cos_workflow |>
-  finalize_workflow(select_best(res, metric = "accuracy")) |>
-  fit(train)
-
-preds <- final_model |>
-  augment(test)
-
-preds |>
-  with(accuracy_vec(as.factor(language), .pred_class))
-
-preds |>
-  mutate(acc = .pred_class == language) |>
-  group_by(language) |>
-  summarize(mean(acc))
-```
-
-0.523
+There seems to be some separation so prediction seems possible.

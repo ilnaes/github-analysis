@@ -1,6 +1,7 @@
 .env
 *.csv
 *.RData
+*.rds
 
 # History files
 .Rhistory

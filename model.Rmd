@@ -1,0 +1,183 @@
+```{r}
+library(tidyverse)
+library(tidymodels)
+library(tidytext)
+library(textrecipes)
+
+# doParallel::registerDoParallel(cores = 3)
+```
+
+```{r}
+df <- read_csv("data/clean.csv") |>
+  mutate(
+    description = ifelse(is.na(description), "MISSING", description)
+  )
+```
+
+# Modeling
+
+We will try to construct a model that predicts description to a language using tf-idf vectors.  We will use two models:
+
+* k-NN model with cosine similarity
+* LASSO
+
+```{r}
+set.seed(54321)
+
+split <- initial_split(df, strata = "language", prop = 0.8)
+train <- training(split)
+test <- testing(split)
+folds <- vfold_cv(train, v = 5)
+
+mset <- metric_set(mn_log_loss, accuracy)
+control <- control_grid(
+  save_workflow = TRUE,
+  # save_pred = TRUE,
+  # extract = extract_model,
+  verbose = TRUE
+)
+```
+
+Here is a master recipe:
+
+```{r}
+master_rec <- recipe(language ~ description, data = df) |>
+  step_mutate(
+    description = str_replace_all(description, "[^\\x00-\\x7F]", " "),
+    description = str_replace_all(description, "\\s+", " "),
+    nwords = str_count(description, "\\w+")
+  ) |>
+  step_filter(nwords >= 2, skip = TRUE) |>
+  step_rm(nwords) |>
+  step_tokenize(description) |>
+  step_stopwords(description) |>
+  step_tokenfilter(description, max_tokens = tune()) |>
+  step_tfidf(description)
+```
+
+### Model and workflow for k-NN
+
+```{r}
+knn_model <- nearest_neighbor(
+  mode = "classification",
+  neighbors = tune(),
+  weight_func = "cos"
+) |>
+  set_engine("kknn")
+
+knn_workflow <- workflow() |>
+  add_recipe(master_rec) |>
+  add_model(knn_model)
+```
+
+```{r}
+knn_res <- knn_workflow |>
+  tune_grid(folds,
+    metrics = mset,
+    control = control,
+    grid = crossing(
+      neighbors = floor(seq(50, 250, length.out = 5)),
+      max_tokens = floor(seq(50, 350, length.out = 5)),
+    )
+  )
+
+saveRDS(knn_res, "res.rds")
+```
+
+```{r}
+knn_res <- readRDS("res.rds")
+
+knn_res |>
+  collect_metrics() |>
+  filter(.metric == "accuracy") |>
+  arrange(-mean)
+
+autoplot(knn_res)
+```
+
+* Best: 0.528
+* neighbors: 100
+* max_tokens: 125
+
+Now evaluate on test set.
+
+```{r}
+final_model <- knn_workflow |>
+  finalize_workflow(select_best(knn_res, metric = "accuracy")) |>
+  fit(train)
+
+preds <- final_model |>
+  augment(test)
+
+preds |>
+  with(accuracy_vec(as.factor(language), .pred_class))
+
+preds |>
+  mutate(acc = .pred_class == language) |>
+  group_by(language) |>
+  summarize(mean(acc))
+```
+
+0.523
+
+
+### LASSO model and workflow
+
+```{r}
+lin_rec <- master_rec |>
+  step_normalize(all_numeric_predictors())
+
+lin_model <- multinom_reg(
+  mode = "classification",
+  penalty = tune()
+) |>
+  set_engine("glmnet")
+
+lin_workflow <- workflow() |>
+  add_recipe(lin_rec) |>
+  add_model(lin_model)
+```
+
+```{r}
+lin_res <- lin_workflow |>
+  tune_grid(folds,
+    metrics = mset,
+    control = control,
+    grid = crossing(
+      penalty = 10^seq(-7, -1, 0.2),
+      max_tokens = floor(seq(100, 500, length.out = 5))
+    )
+  )
+
+saveRDS(lin_res, "lin_res.rds")
+```
+
+```{r}
+lin_res <- readRDS("lin_res.rds")
+
+lin_res |>
+  collect_metrics() |>
+  filter(.metric == "accuracy") |>
+  arrange(-mean)
+
+autoplot(lin_res)
+```
+
+Now evaluate on test set.
+
+```{r}
+final_model <- lin_workflow |>
+  finalize_workflow(select_best(lin_res, metric = "accuracy")) |>
+  fit(train)
+
+preds <- final_model |>
+  augment(test)
+
+preds |>
+  with(accuracy_vec(as.factor(language), .pred_class))
+
+preds |>
+  mutate(acc = .pred_class == language) |>
+  group_by(language) |>
+  summarize(mean(acc))
+```

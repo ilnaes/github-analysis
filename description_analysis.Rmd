@@ -3,6 +3,8 @@ library(tidyverse)
 library(tidymodels)
 library(tidytext)
 library(textrecipes)
+
+doParallel::registerDoParallel(cores = 3)
 ```
 
 ```{r}
@@ -37,15 +39,12 @@ word_count |>
 It looks like many wordy descriptions contain Chinese (with some mixed in English usually).  Since we want to do an English-based analysis, we will strip out all non-English words.
 
 ```{r}
-df <- df |>
+word_count <- df |>
   mutate(
-    description = str_replace_all(description, "[^A-Za-z0-9\\s'-\\.]", " "),
+    description = str_replace_all(description, "[^\\x00-\\x7F]", " "),
     description = str_replace_all(description, "\\s+", " "),
     nwords = str_count(description, "\\w+")
   )
-
-word_count <- df |>
-  mutate(nwords = str_count(description, "\\w+"))
 ```
 
 Let's see if word count has any correlation with stars.
@@ -54,7 +53,7 @@ Let's see if word count has any correlation with stars.
 word_count |>
   ggplot(aes(log1p(nwords), stars)) +
   geom_point() +
-  geom_smooth(method = 'lm') +
+  geom_smooth(method = "lm") +
   facet_wrap(vars(language), scales = "free")
 ```
 
@@ -230,7 +229,12 @@ umap_df$layout |>
 We will try to construct a model that predicts which matches a description to a language.  We will use a KNN model with cosine similarity as a metric.
 
 ```{r}
-cos_rec <- recipe(language ~ description + nwords, data = word_count) |>
+cos_rec <- recipe(language ~ description, data = df) |>
+  step_mutate(
+    description = str_replace_all(description, "[^\\x00-\\x7F]", " "),
+    description = str_replace_all(description, "\\s+", " "),
+    nwords = str_count(description, "\\w+")
+  ) |>
   step_filter(nwords >= 2, skip = TRUE) |>
   step_rm(nwords) |>
   step_tokenize(description) |>
@@ -238,9 +242,11 @@ cos_rec <- recipe(language ~ description + nwords, data = word_count) |>
   step_tokenfilter(description, max_tokens = tune()) |>
   step_tfidf(description)
 
-cos_model <- nearest_neighbor(mode = "classification",
-                              neighbors = tune(),
-                              weight_func = "cos") |>
+cos_model <- nearest_neighbor(
+  mode = "classification",
+  neighbors = tune(),
+  weight_func = "cos"
+) |>
   set_engine("kknn")
 
 cos_workflow <- workflow() |>
@@ -251,35 +257,44 @@ cos_workflow <- workflow() |>
 ```{r}
 set.seed(54321)
 
-split <- initial_split(word_count, strata = "language", prop = 0.8)
+split <- initial_split(df, strata = "language", prop = 0.8)
 train <- training(split)
 test <- testing(split)
 folds <- vfold_cv(train, v = 5)
 
 mset <- metric_set(mn_log_loss, accuracy)
-control <- control_grid(save_workflow = TRUE,
-                        # save_pred = TRUE,
-                        # extract = extract_model,
-                        verbose = TRUE)
+control <- control_grid(
+  save_workflow = TRUE,
+  # save_pred = TRUE,
+  # extract = extract_model,
+  verbose = TRUE
+)
 ```
 
 ```{r}
-res <- cos_workflow |> 
+res <- cos_workflow |>
   tune_grid(folds,
-            metrics = mset,
-            control = control,
-            grid = crossing(neighbors = c(34),
-                            max_tokens = c(225)),
-            )
+    metrics = mset,
+    control = control,
+    grid = crossing(
+      neighbors = floor(seq(50, 250, length.out = 50)),
+      max_tokens = floor(seq(50, 350, length.out = 50)),
+    )
+  )
 
-# save(res, file = "res.RData")
+res <- saveRDS(res, "res.rds")
 ```
 
 Parameters come from tuning
 
 ```{r}
-load("res.RData")
-collect_metrics(res) |> filter(.metric == "accuracy") |> arrange(-mean)
+res <- readRDS("res.rds")
+
+res |>
+  collect_metrics() |>
+  filter(.metric == "accuracy") |>
+  arrange(-mean)
+
 autoplot(res)
 ```
 
@@ -288,19 +303,19 @@ autoplot(res)
 * max_tokens: 125
 
 ```{r}
-final_model <- cos_workflow |> 
-  finalize_workflow(select_best(res, metric = "accuracy")) |> 
+final_model <- cos_workflow |>
+  finalize_workflow(select_best(res, metric = "accuracy")) |>
   fit(train)
 
-preds <- final_model |> 
+preds <- final_model |>
   augment(test)
 
-preds |> 
+preds |>
   with(accuracy_vec(as.factor(language), .pred_class))
 
-preds |> 
-  mutate(acc = .pred_class == language) |> 
-  group_by(language) |> 
+preds |>
+  mutate(acc = .pred_class == language) |>
+  group_by(language) |>
   summarize(mean(acc))
 ```
 

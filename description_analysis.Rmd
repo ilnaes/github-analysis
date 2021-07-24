@@ -52,9 +52,9 @@ Let's see if word count has any correlation with stars.
 
 ```{r}
 word_count |>
-  ggplot(aes(nwords, stars)) +
-  scale_x_log10() +
+  ggplot(aes(log1p(nwords), stars)) +
   geom_point() +
+  geom_smooth(method = 'lm') +
   facet_wrap(vars(language), scales = "free")
 ```
 
@@ -148,10 +148,7 @@ library(igraph)
 library(ggraph)
 
 pairs_count |>
-  filter(
-    n >= 23,
-    language %in% c("R", "Python", "JavaScript", "Go", "C", "C++", "Java")
-  ) |>
+  filter(n >= 59) |>
   relocate(language, .after = word2) |>
   graph_from_data_frame() |>
   ggraph(layout = "fr") +
@@ -228,14 +225,9 @@ umap_df$layout |>
   ylim(-5, 4)
 ```
 
-# Modelling
+# Modeling
 
-We will try to construct a model that predicts which matches a description to a language.
-
-We will use two methods:
-
-1. Cosine similarity on tfidf vectors
-2. A simple n-gram model
+We will try to construct a model that predicts which matches a description to a language.  We will use a KNN model with cosine similarity as a metric.
 
 ```{r}
 cos_rec <- recipe(language ~ description + nwords, data = word_count) |>
@@ -276,8 +268,8 @@ res <- cos_workflow |>
   tune_grid(folds,
             metrics = mset,
             control = control,
-            grid = crossing(neighbors = c(28),
-                            max_tokens = c(150)),
+            grid = crossing(neighbors = c(34),
+                            max_tokens = c(225)),
             )
 
 # save(res, file = "res.RData")
@@ -286,9 +278,14 @@ res <- cos_workflow |>
 Parameters come from tuning
 
 ```{r}
-# load("res.RData")
+load("res.RData")
+collect_metrics(res) |> filter(.metric == "accuracy") |> arrange(-mean)
 autoplot(res)
 ```
+
+* Best: 0.528
+* neighbors: 100
+* max_tokens: 125
 
 ```{r}
 final_model <- cos_workflow |> 
@@ -299,7 +296,12 @@ preds <- final_model |>
   augment(test)
 
 preds |> 
+  with(accuracy_vec(as.factor(language), .pred_class))
+
+preds |> 
   mutate(acc = .pred_class == language) |> 
   group_by(language) |> 
   summarize(mean(acc))
 ```
+
+0.523

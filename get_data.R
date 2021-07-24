@@ -78,14 +78,17 @@ get_tibble <- function(response) {
 languages <- c("python", "js", "java", "c", "r")
 num <- c(4000, 4000, 4000, 4000, 4000)
 
-dfs <- map(languages, num, \(x, y) get_tibble(get_repos(x, n = y)))
+dfs <- map2(languages, num,
+            \(x, y)
+            get_tibble(get_repos(x, n = y)) |> 
+              distinct(full_name, .keep_all = TRUE) |> 
+              mutate(language = x))
 
 dfs |>
   bind_rows() |>
   write_csv("data/raw.csv")
 
 read_csv("data/raw.csv") |>
-  filter(language != "CoffeeScript") |> 
   select(-ends_with("url"), -node_id, -private, -fork, -disabled, -score, -stargazers_count, -watchers_count, -permissions) |>
   rename(stars = watchers) |> 
   write_csv("data/clean.csv")

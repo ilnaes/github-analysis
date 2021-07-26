@@ -5,6 +5,10 @@
 
 tags
 
+wandb
+__pycache__
+*.py[cod]
+
 # History files
 .Rhistory
 .Rapp.history

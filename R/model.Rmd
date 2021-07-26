@@ -3,12 +3,15 @@ library(tidyverse)
 library(tidymodels)
 library(tidytext)
 library(textrecipes)
+library(stacks)
+library(here)
+library(vip)
 
 # doParallel::registerDoParallel(cores = 3)
 ```
 
 ```{r}
-df <- read_csv("data/clean.csv") |>
+df <- read_csv(here("data", "clean.csv")) |>
   mutate(
     description = ifelse(is.na(description), "MISSING", description)
   )
@@ -32,8 +35,7 @@ folds <- vfold_cv(train, v = 5)
 mset <- metric_set(mn_log_loss, accuracy)
 control <- control_grid(
   save_workflow = TRUE,
-  # save_pred = TRUE,
-  # extract = extract_model,
+  save_pred = TRUE,
   verbose = TRUE
 )
 ```
@@ -81,11 +83,11 @@ knn_res <- knn_workflow |>
     )
   )
 
-saveRDS(knn_res, "res.rds")
+saveRDS(knn_res, here("outputs", "knn_res.rds"))
 ```
 
 ```{r}
-knn_res <- readRDS("res.rds")
+knn_res <- readRDS(here("outputs", "knn_res.rds"))
 
 knn_res |>
   collect_metrics() |>
@@ -149,11 +151,11 @@ lin_res <- lin_workflow |>
     )
   )
 
-saveRDS(lin_res, "lin_res.rds")
+saveRDS(lin_res, here("outputs", "lin_res.rds"))
 ```
 
 ```{r}
-lin_res <- readRDS("lin_res.rds")
+lin_res <- readRDS(here("outputs", "lin_res.rds"))
 
 lin_res |>
   collect_metrics() |>
@@ -162,6 +164,9 @@ lin_res |>
 
 autoplot(lin_res)
 ```
+
+* best: 0.684
+* max_tokens: 1000 (but 700 looks good enough)
 
 Now evaluate on test set.
 
@@ -181,3 +186,40 @@ preds |>
   group_by(language) |>
   summarize(mean(acc))
 ```
+
+0.67
+
+LASSO continues to outperform.
+
+```{r}
+final_model |>
+  extract_fit_engine() |>
+  vip(n = 25)
+```
+
+
+
+### Let's get stacking
+
+```{r}
+doParallel::registerDoParallel(cores = 1) # need to do this or training hangs for some reason
+
+lang_st <- stacks() |>
+  add_candidates(lin_res) |> 
+  add_candidates(knn_res)
+
+lang_model <- lang_st |>
+  blend_predictions() |>
+  fit_members()
+```
+
+```{r}
+test |>
+  {\(x) bind_cols(x, predict(lang_model, x))}() |>
+  with(accuracy_vec(as.factor(language), .pred_class))
+```
+
+
+0.66
+
+womp womp

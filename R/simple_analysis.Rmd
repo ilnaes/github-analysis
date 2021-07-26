@@ -10,10 +10,11 @@ library(stopwords)
 library(lubridate)
 library(corrr)
 library(forcats)
+library(here)
 ```
 
 ```{r, message=FALSE}
-df <- read_csv("data/clean.csv")
+df <- read_csv(here("data", "clean.csv"))
 ```
 
 Fields of interest:

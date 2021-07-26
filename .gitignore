@@ -3,6 +3,8 @@
 *.RData
 *.rds
 
+tags
+
 # History files
 .Rhistory
 .Rapp.history

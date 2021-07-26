@@ -3,12 +3,13 @@ library(tidyverse)
 library(tidymodels)
 library(tidytext)
 library(textrecipes)
+library(here)
 
 # doParallel::registerDoParallel(cores = 3)
 ```
 
 ```{r}
-df <- read_csv("data/clean.csv") |>
+df <- read_csv(here("data", "clean.csv")) |>
   mutate(
     description = ifelse(is.na(description), "MISSING", description),
     stars = log(stars)

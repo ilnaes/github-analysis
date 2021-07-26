@@ -2,6 +2,7 @@ library(dotenv)
 library(httr)
 library(jsonlite)
 library(tidyverse)
+library(here)
 
 token <- Sys.getenv("TOKEN")
 
@@ -76,7 +77,7 @@ get_tibble <- function(response) {
 }
 
 languages <- c("python", "js", "java", "c", "r")
-num <- c(4000, 4000, 4000, 4000, 4000)
+num <- c(8000, 8000, 8000, 8000, 4000)
 
 dfs <- map2(
   languages, num,
@@ -88,9 +89,9 @@ dfs <- map2(
 
 dfs |>
   bind_rows() |>
-  write_csv("data/raw.csv")
+  write_csv(here("data", "raw.csv"))
 
-read_csv("data/raw.csv") |>
+read_csv(here("data", "raw.csv")) |>
   select(-ends_with("url"), -node_id, -private, -fork, -disabled, -score, -stargazers_count, -watchers_count, -permissions) |>
   rename(stars = watchers) |>
-  write_csv("data/clean.csv")
+  write_csv(here("data", "clean.csv"))

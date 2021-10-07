@@ -64,7 +64,8 @@ def get_optimizer_params(config, model):
             "params": [
                 p
                 for n, p in model.roberta.named_parameters()
-                if not any(nd in n for nd in no_decay) and any(nd in n for nd in group1)
+                if not any(nd in n for nd in no_decay)
+                and any(nd in n for nd in group1)
             ],
             "weight_decay_rate": config["wd"],
             "lr": config["lr"] / 2.6,
@@ -73,7 +74,8 @@ def get_optimizer_params(config, model):
             "params": [
                 p
                 for n, p in model.roberta.named_parameters()
-                if not any(nd in n for nd in no_decay) and any(nd in n for nd in group2)
+                if not any(nd in n for nd in no_decay)
+                and any(nd in n for nd in group2)
             ],
             "weight_decay_rate": config["wd"],
             "lr": config["lr"],
@@ -82,7 +84,8 @@ def get_optimizer_params(config, model):
             "params": [
                 p
                 for n, p in model.roberta.named_parameters()
-                if not any(nd in n for nd in no_decay) and any(nd in n for nd in group3)
+                if not any(nd in n for nd in no_decay)
+                and any(nd in n for nd in group3)
             ],
             "weight_decay_rate": config["wd"],
             "lr": config["lr"] * 2.6,
@@ -100,7 +103,8 @@ def get_optimizer_params(config, model):
             "params": [
                 p
                 for n, p in model.roberta.named_parameters()
-                if any(nd in n for nd in no_decay) and any(nd in n for nd in group1)
+                if any(nd in n for nd in no_decay)
+                and any(nd in n for nd in group1)
             ],
             "weight_decay_rate": 0.0,
             "lr": config["lr"] / 2.6,
@@ -109,7 +113,8 @@ def get_optimizer_params(config, model):
             "params": [
                 p
                 for n, p in model.roberta.named_parameters()
-                if any(nd in n for nd in no_decay) and any(nd in n for nd in group2)
+                if any(nd in n for nd in no_decay)
+                and any(nd in n for nd in group2)
             ],
             "weight_decay_rate": 0.0,
             "lr": config["lr"],
@@ -118,13 +123,16 @@ def get_optimizer_params(config, model):
             "params": [
                 p
                 for n, p in model.roberta.named_parameters()
-                if any(nd in n for nd in no_decay) and any(nd in n for nd in group3)
+                if any(nd in n for nd in no_decay)
+                and any(nd in n for nd in group3)
             ],
             "weight_decay_rate": 0.0,
             "lr": config["lr"] * 2.6,
         },
         {
-            "params": [p for n, p in model.named_parameters() if "roberta" not in n],
+            "params": [
+                p for n, p in model.named_parameters() if "roberta" not in n
+            ],
             "lr": config["head_lr"],
             "momentum": 0.99,
         },
@@ -235,31 +243,38 @@ def train(config, fold, model, optimizer, train, val, scheduler):
             preds = model(input_ids=ids, attention_mask=masks)
             loss = loss_fcn(preds.logits, target)
 
-            acc = torch.mean((torch.argmax(preds.logits, dim=1) == target).float())
+            acc = torch.mean(
+                (torch.argmax(preds.logits, dim=1) == target).float()
+            )
             avg.update(acc.detach().cpu().numpy())
 
             loss.backward()
             optimizer.step()
 
-            tk.set_postfix({"train_loss": np.sqrt(avg.avg)})
+            tk.set_postfix(
+                {
+                    "train_acc": avg.avg,
+                    "train_loss": np.sqrt(loss.detach().cpu().numpy().mean()),
+                }
+            )
 
         # only validate when not debugging
         if val is not None:
-            val_loss, _ = eval(model, val)
+            val_loss, val_acc = eval(model, val)
         else:
             val_loss = "DEBUG"
 
         logger.info(
-            f"Epoch {e+1}/{epochs} -- Validation loss: {val_loss}\t Train loss: {np.sqrt(avg.avg)}"
+            f"Epoch {e+1}/{epochs} -- Validation acc: {val_acc}\t Train acc: {avg.avg}"
         )
 
-        if val is not None and cfg.WANDB:
-            wandb.log(
-                {
-                    "train_loss": np.sqrt(avg.avg),
-                    "val_loss": val_loss,
-                }
-            )
+        # if val is not None and cfg.WANDB:
+        #     wandb.log(
+        #         {
+        #             "train_loss": np.sqrt(avg.avg),
+        #             "val_loss": val_loss,
+        #         }
+        #     )
 
         if scheduler is not None:
             scheduler.step()
@@ -267,7 +282,9 @@ def train(config, fold, model, optimizer, train, val, scheduler):
         if val is not None:
             if val_loss < max_loss:
                 patience, max_loss = 0, val_loss
-                torch.save(model.state_dict(), f"{cfg.MODEL_SAVE_DIR}model_{fold}.pt")
+                torch.save(
+                    model.state_dict(), f"{cfg.MODEL_SAVE_DIR}model_{fold}.pt"
+                )
             else:
                 patience += 1
                 if cfg.PATIENCE != 0 and patience > cfg.PATIENCE:
@@ -295,15 +312,17 @@ def eval(model, val):
             preds = model(input_ids=ids, attention_mask=masks)
             loss = loss_fcn(preds.logits, target)
 
-            acc = torch.mean((torch.argmax(preds.logits, dim=1) == target).float())
+            acc = torch.mean(
+                (torch.argmax(preds.logits, dim=1) == target).float()
+            )
             avg.update(acc.detach().cpu().numpy())
             # avg.update(loss.detach().cpu().numpy())
 
             total += loss.detach().cpu()
 
-            tk.set_postfix({"val_loss": np.sqrt(avg.avg)})
+            tk.set_postfix({"val_acc": avg.avg})
 
-    return torch.sqrt(total / len(val)), None
+    return np.sqrt(total.numpy().mean()), avg.avg
 
 
 def setup_parser():

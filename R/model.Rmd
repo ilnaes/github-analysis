@@ -11,7 +11,7 @@ library(vip)
 ```
 
 ```{r}
-df <- read_csv(here("data", "clean.csv")) |>
+df <- read_csv(here("data", "clean.csv")) %>%
   mutate(
     description = ifelse(is.na(description), "MISSING", description)
   )
@@ -43,17 +43,17 @@ control <- control_grid(
 Here is a master recipe:
 
 ```{r}
-master_rec <- recipe(language ~ description, data = df) |>
+master_rec <- recipe(language ~ description, data = df) %>%
   step_mutate(
     description = str_replace_all(description, "[^\\x00-\\x7F]", " "),
     description = str_replace_all(description, "\\s+", " "),
     nwords = str_count(description, "\\w+")
-  ) |>
-  step_filter(nwords >= 2, skip = TRUE) |>
-  step_rm(nwords) |>
-  step_tokenize(description) |>
-  step_stopwords(description) |>
-  step_tokenfilter(description, max_tokens = tune()) |>
+  ) %>%
+  step_filter(nwords >= 2, skip = TRUE) %>%
+  step_rm(nwords) %>%
+  step_tokenize(description) %>%
+  step_stopwords(description) %>%
+  step_tokenfilter(description, max_tokens = tune()) %>%
   step_tfidf(description)
 ```
 
@@ -64,16 +64,16 @@ knn_model <- nearest_neighbor(
   mode = "classification",
   neighbors = tune(),
   weight_func = "cos"
-) |>
+) %>%
   set_engine("kknn")
 
-knn_workflow <- workflow() |>
-  add_recipe(master_rec) |>
+knn_workflow <- workflow() %>%
+  add_recipe(master_rec) %>%
   add_model(knn_model)
 ```
 
 ```{r}
-knn_res <- knn_workflow |>
+knn_res <- knn_workflow %>%
   tune_grid(folds,
     metrics = mset,
     control = control,
@@ -89,9 +89,9 @@ saveRDS(knn_res, here("outputs", "knn_res.rds"))
 ```{r}
 knn_res <- readRDS(here("outputs", "knn_res.rds"))
 
-knn_res |>
-  collect_metrics() |>
-  filter(.metric == "accuracy") |>
+knn_res %>%
+  collect_metrics() %>%
+  filter(.metric == "accuracy") %>%
   arrange(-mean)
 
 autoplot(knn_res)
@@ -104,19 +104,19 @@ autoplot(knn_res)
 Now evaluate on test set.
 
 ```{r}
-final_model <- knn_workflow |>
-  finalize_workflow(select_best(knn_res, metric = "accuracy")) |>
+final_model <- knn_workflow %>%
+  finalize_workflow(select_best(knn_res, metric = "accuracy")) %>%
   fit(train)
 
-preds <- final_model |>
+preds <- final_model %>%
   augment(test)
 
-preds |>
+preds %>%
   with(accuracy_vec(as.factor(language), .pred_class))
 
-preds |>
-  mutate(acc = .pred_class == language) |>
-  group_by(language) |>
+preds %>%
+  mutate(acc = .pred_class == language) %>%
+  group_by(language) %>%
   summarize(mean(acc))
 ```
 
@@ -126,22 +126,22 @@ preds |>
 ### LASSO model and workflow
 
 ```{r}
-lin_rec <- master_rec |>
+lin_rec <- master_rec %>%
   step_normalize(all_numeric_predictors())
 
 lin_model <- multinom_reg(
   mode = "classification",
   penalty = tune()
-) |>
+) %>%
   set_engine("glmnet")
 
-lin_workflow <- workflow() |>
-  add_recipe(lin_rec) |>
+lin_workflow <- workflow() %>%
+  add_recipe(lin_rec) %>%
   add_model(lin_model)
 ```
 
 ```{r}
-lin_res <- lin_workflow |>
+lin_res <- lin_workflow %>%
   tune_grid(folds,
     metrics = mset,
     control = control,
@@ -157,9 +157,9 @@ saveRDS(lin_res, here("outputs", "lin_res.rds"))
 ```{r}
 lin_res <- readRDS(here("outputs", "lin_res.rds"))
 
-lin_res |>
-  collect_metrics() |>
-  filter(.metric == "accuracy") |>
+lin_res %>%
+  collect_metrics() %>%
+  filter(.metric == "accuracy") %>%
   arrange(-mean)
 
 autoplot(lin_res)
@@ -171,19 +171,19 @@ autoplot(lin_res)
 Now evaluate on test set.
 
 ```{r}
-final_model <- lin_workflow |>
-  finalize_workflow(select_best(lin_res, metric = "accuracy")) |>
+final_model <- lin_workflow %>%
+  finalize_workflow(select_best(lin_res, metric = "accuracy")) %>%
   fit(train)
 
-preds <- final_model |>
+preds <- final_model %>%
   augment(test)
 
-preds |>
+preds %>%
   with(accuracy_vec(as.factor(language), .pred_class))
 
-preds |>
-  mutate(acc = .pred_class == language) |>
-  group_by(language) |>
+preds %>%
+  mutate(acc = .pred_class == language) %>%
+  group_by(language) %>%
   summarize(mean(acc))
 ```
 
@@ -192,8 +192,8 @@ preds |>
 LASSO continues to outperform.
 
 ```{r}
-final_model |>
-  extract_fit_engine() |>
+final_model %>%
+  extract_fit_engine() %>%
   vip(n = 25)
 ```
 
@@ -204,18 +204,20 @@ final_model |>
 ```{r}
 doParallel::registerDoParallel(cores = 1) # need to do this or training hangs for some reason
 
-lang_st <- stacks() |>
-  add_candidates(lin_res) |> 
+lang_st <- stacks() %>%
+  add_candidates(lin_res) %>%
   add_candidates(knn_res)
 
-lang_model <- lang_st |>
-  blend_predictions() |>
+lang_model <- lang_st %>%
+  blend_predictions() %>%
   fit_members()
 ```
 
 ```{r}
-test |>
-  {\(x) bind_cols(x, predict(lang_model, x))}() |>
+test %>%
+  {
+    \(x) bind_cols(x, predict(lang_model, x))
+  }() %>%
   with(accuracy_vec(as.factor(language), .pred_class))
 ```
 

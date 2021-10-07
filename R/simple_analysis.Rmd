@@ -1,5 +1,5 @@
 ```{r, include = FALSE}
-knitr::opts_chunk$set(warning=FALSE)
+knitr::opts_chunk$set(warning = FALSE)
 ```
 
 ```{r, message=FALSE}
@@ -37,7 +37,7 @@ All analyses should be faceted by language.
 Let's look at stars
 
 ```{r, }
-df |>
+df %>%
   ggplot(aes(stars)) +
   geom_density() +
   scale_x_log10() +
@@ -47,8 +47,8 @@ df |>
 Very skewed.  Even log transform looks skewed.  Javascript is weird as it has a less defined peak.
 
 ```{r}
-df |>
-  mutate(language = fct_reorder(language, stars)) |>
+df %>%
+  mutate(language = fct_reorder(language, stars)) %>%
   ggplot(aes(log(stars), language)) +
   geom_boxplot()
 ```
@@ -58,16 +58,16 @@ About what you would expect for the Github crowd.  Web friendly languages on top
 List of the most popular projects (under 100000 stars):
 
 ```{r}
-df |>
-  group_by(language) |>
-  slice_max(stars, n = 1) |>
+df %>%
+  group_by(language) %>%
+  slice_max(stars, n = 1) %>%
   select(name, description, language)
 ```
 
 Let's now look at size.
 
 ```{r}
-df |>
+df %>%
   ggplot(aes(size)) +
   geom_density(fill = "blue") +
   scale_x_log10() +
@@ -77,7 +77,7 @@ df |>
 Also skewed, but log transform seems to be sufficient.  There is one repo with size 0:
 
 ```{r}
-df |> filter(size == 0)
+df %>% filter(size == 0)
 ```
 
 This is probably an error since nuwa is there.
@@ -85,9 +85,9 @@ This is probably an error since nuwa is there.
 Let's look at created_at:
 
 ```{r}
-df |>
-  group_by(month = floor_date(created_at, "months"), language) |>
-  count() |>
+df %>%
+  group_by(month = floor_date(created_at, "months"), language) %>%
+  count() %>%
   ggplot(aes(month, n)) +
   geom_line() +
   facet_wrap(vars(language), scales = "free_x")
@@ -96,7 +96,7 @@ df |>
 Nothing much to see where.  Popular projects were created mostly around 2015-2018.
 
 ```{r}
-df |>
+df %>%
   ggplot(aes(log1p(open_issues_count))) +
   geom_density() +
   facet_wrap(vars(language), scales = "free")
@@ -107,7 +107,7 @@ R is different from the general programming languages in that they have more pro
 We now log transform stars, size, and open issues for the future:
 
 ```{r}
-log_df <- df |>
+log_df <- df %>%
   mutate(
     stars = log(stars),
     size = log1p(size),
@@ -120,7 +120,7 @@ log_df <- df |>
 First up: size.
 
 ```{r}
-log_df |>
+log_df %>%
   ggplot(aes(size, stars)) +
   geom_point() +
   facet_wrap(vars(language), scales = "free")
@@ -129,7 +129,7 @@ log_df |>
 Ever so slight positive correlations.
 
 ```{r}
-log_df |>
+log_df %>%
   ggplot(aes(stars)) +
   geom_density(aes(fill = owner), alpha = 0.5) +
   facet_wrap(vars(language), scales = "free")
@@ -138,21 +138,21 @@ log_df |>
 Organizations tend to have more stars.  Visually, it looks less pronounced in R.
 
 ```{r}
-df |>
-  select(stars, owner, size, language) |>
-  mutate(owner = owner == "Organization") |>
-  group_by(language) |>
+df %>%
+  select(stars, owner, size, language) %>%
+  mutate(owner = owner == "Organization") %>%
+  group_by(language) %>%
   group_map(\(x, y) list(
     owner = cor(x$owner, log(x$stars)),
     size = cor(log1p(x$size), log(x$stars)),
     lang = y$language
-  )) |>
-  map(\(x) do.call(tibble, x)) |>
+  )) %>%
+  map(\(x) do.call(tibble, x)) %>%
   bind_rows()
 ```
 
 ```{r}
-df |>
+df %>%
   ggplot(aes(log(size))) +
   geom_density(aes(fill = owner), alpha = 0.5)
 ```
@@ -160,13 +160,13 @@ df |>
 Let's now look at licenses.  We will otherize less popular licenses and keep only the top 10.
 
 ```{r}
-lump_lic <- df |>
-  mutate(license = license |> fct_lump(n = 10) |> fct_infreq() |> fct_rev())
+lump_lic <- df %>%
+  mutate(license = license %>% fct_lump(n = 10) %>% fct_infreq() %>% fct_rev())
 
-lump_lic |>
-  group_by(license, owner) |>
-  count() |>
-  ungroup() |>
+lump_lic %>%
+  group_by(license, owner) %>%
+  count() %>%
+  ungroup() %>%
   ggplot(aes(n, license)) +
   geom_col(aes(fill = owner), position = "dodge")
 ```
@@ -174,15 +174,15 @@ lump_lic |>
 Users are far more likely to have no license or use MIT and organizations are more likely to use more exotic licenses.
 
 ```{r}
-lump_lic |>
-  mutate(stars = log(stars)) |>
-  group_by(license) |>
+lump_lic %>%
+  mutate(stars = log(stars)) %>%
+  group_by(license) %>%
   summarize(
     log_stars = mean(stars),
     n = n(),
     lo = quantile(stars, 0.025),
     hi = quantile(stars, 0.975)
-  ) |>
+  ) %>%
   ggplot(aes(log_stars, license)) +
   geom_point(aes(size = n)) +
   geom_errorbarh(aes(xmin = lo, xmax = hi), height = 0.5) +
@@ -192,12 +192,12 @@ lump_lic |>
 License has some weak correspondence with popularity, although having an exotic license or *not* having a license seems to have a stronger correspondence to having low popularity.
 
 ```{r}
-log_df |>
+log_df %>%
   ggplot(aes(open_issues_count, stars)) +
   geom_point() +
   facet_wrap(vars(language), scales = "free")
 
-lm(stars ~ open_issues_count, data = log_df) |> summary()
+lm(stars ~ open_issues_count, data = log_df) %>% summary()
 ```
 
 Stars are correlated with number of issues, which seems strange.  One possibility is that this could be that it is confounded by size.
@@ -205,15 +205,15 @@ Stars are correlated with number of issues, which seems strange.  One possibilit
 This will be hard to facet by language since different languages are at different scales, so let's just look at Python, arguably the most broad language.
 
 ```{r}
-log_df |>
-  filter(language == "Python") |>
+log_df %>%
+  filter(language == "Python") %>%
   ggplot(aes(size, open_issues_count)) +
   geom_point(aes(color = stars)) +
   scale_color_gradient2(low = "blue", high = "red", midpoint = 9)
 
-log_df |>
-  filter(language == "Python") |>
-  lm(formula = stars ~ size + open_issues_count) |>
+log_df %>%
+  filter(language == "Python") %>%
+  lm(formula = stars ~ size + open_issues_count) %>%
   summary()
 ```
 

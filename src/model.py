@@ -41,11 +41,6 @@ class MyModel(nn.Module):
         # out = self.classifier(out)
         return out
 
-    @staticmethod
-    def add_to_argparse(parser):
-        parser.add_argument("--high_dropout", type=int, default=cfg.HIGH_DROPOUT)
-        return parser
-
         # mean-max pooling
         # out = torch.stack(
         #     tuple(out[-i - 1] for i in range(cfg.N_LAST_HIDDEN)), dim=0
@@ -62,3 +57,8 @@ class MyModel(nn.Module):
         #     ),
         #     dim=0,
         # )
+
+    @staticmethod
+    def add_to_argparse(parser):
+        parser.add_argument("--high_dropout", type=int, default=cfg.HIGH_DROPOUT)
+        return parser

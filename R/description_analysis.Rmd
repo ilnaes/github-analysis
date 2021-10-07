@@ -9,7 +9,7 @@ library(here)
 ```
 
 ```{r}
-df <- read_csv(here("data", "clean.csv")) |>
+df <- read_csv(here("data", "clean.csv")) %>%
   mutate(
     description = ifelse(is.na(description), "MISSING", description),
     stars = log(stars)
@@ -19,10 +19,10 @@ df <- read_csv(here("data", "clean.csv")) |>
 We now do a more in-depth analysis of repo descriptions.
 
 ```{r}
-word_count <- df |>
+word_count <- df %>%
   mutate(nwords = str_count(description, "\\w+"))
 
-word_count |>
+word_count %>%
   ggplot(aes(nwords)) +
   scale_x_log10() +
   geom_histogram()
@@ -31,16 +31,16 @@ word_count |>
 Word count is very skewed.
 
 ```{r}
-word_count |>
-  arrange(-nwords) |>
-  head(10) |>
+word_count %>%
+  arrange(-nwords) %>%
+  head(10) %>%
   pluck("description")
 ```
 
 It looks like many wordy descriptions contain Chinese (with some mixed in English usually).  Since we want to do an English-based analysis, we will strip out all non-English words.
 
 ```{r}
-word_count <- df |>
+word_count <- df %>%
   mutate(
     description = str_replace_all(description, "[^\\x00-\\x7F]", " "),
     description = str_replace_all(description, "\\s+", " "),
@@ -51,7 +51,7 @@ word_count <- df |>
 Let's see if word count has any correlation with stars.
 
 ```{r}
-word_count |>
+word_count %>%
   ggplot(aes(log1p(nwords), stars)) +
   geom_point() +
   geom_smooth(method = "lm") +
@@ -61,7 +61,7 @@ word_count |>
 Not really.
 
 ```{r}
-word_count |>
+word_count %>%
   ggplot(aes(nwords)) +
   geom_density() +
   scale_x_log10() +
@@ -75,22 +75,22 @@ Word count also doesn't seem to be highly correlated with language although R mi
 We first tokenize words.  Let's look at most popular words.
 
 ```{r}
-word_list <- word_count |>
-  unnest_tokens(word, description) |>
+word_list <- word_count %>%
+  unnest_tokens(word, description) %>%
   anti_join(stop_words)
 
-word_list |>
-  count(word) |>
+word_list %>%
+  count(word) %>%
   arrange(-n)
 ```
 
 Let's see if this changes by language.  Let's just look at top 5
 
 ```{r}
-word_list |>
-  count(word, language) |>
-  group_by(language) |>
-  slice_max(n, n = 5) |>
+word_list %>%
+  count(word, language) %>%
+  group_by(language) %>%
+  slice_max(n, n = 5) %>%
   ggplot(aes(n, word)) +
   geom_col() +
   facet_wrap(vars(language), scales = "free")
@@ -105,32 +105,32 @@ Given how nicely topics seem to appear from the most popular words, let's try so
 Let's first see how often pairs of words appear together in a description.
 
 ```{r}
-pairs <- word_count |>
-  filter(nwords >= 2) |>
-  select(full_name, language, description) |>
-  mutate(d1 = description) |>
-  unnest_tokens(word1, description) |>
-  anti_join(stop_words, by = c("word1" = "word")) |>
-  distinct(full_name, language, d1, word1) |>
-  unnest_tokens(word2, d1) |>
-  anti_join(stop_words, by = c("word2" = "word")) |>
-  distinct(full_name, language, word1, word2) |>
-  filter(word1 < word2) |>
+pairs <- word_count %>%
+  filter(nwords >= 2) %>%
+  select(full_name, language, description) %>%
+  mutate(d1 = description) %>%
+  unnest_tokens(word1, description) %>%
+  anti_join(stop_words, by = c("word1" = "word")) %>%
+  distinct(full_name, language, d1, word1) %>%
+  unnest_tokens(word2, d1) %>%
+  anti_join(stop_words, by = c("word2" = "word")) %>%
+  distinct(full_name, language, word1, word2) %>%
+  filter(word1 < word2) %>%
   select(-full_name)
 
-pairs |>
-  count(word1, word2) |>
+pairs %>%
+  count(word1, word2) %>%
   arrange(-n)
 ```
 
 Let's now look at bigrams by language.
 
 ```{r}
-pairs |>
-  unite("bigram", word1:word2) |>
-  group_by(language) |>
-  count(bigram) |>
-  slice_max(n, n = 5) |>
+pairs %>%
+  unite("bigram", word1:word2) %>%
+  group_by(language) %>%
+  count(bigram) %>%
+  slice_max(n, n = 5) %>%
   ggplot(aes(n, bigram)) +
   geom_col() +
   facet_wrap(vars(language), scales = "free")
@@ -139,15 +139,15 @@ pairs |>
 Let's look at a correlation graph.  We will throw out "library" because that's basically a stop word on Github.  We then assign each pair to the language that uses it the most.
 
 ```{r}
-pairs_count <- pairs |>
-  filter(word1 != "library", word2 != "library") |>
-  group_by(language, word1, word2) |>
-  summarize(lang_count = n()) |>
-  group_by(word1, word2) |>
-  mutate(n = sum(lang_count)) |>
-  filter(n >= 5) |>
-  slice_max(lang_count, n = 1) |>
-  ungroup() |>
+pairs_count <- pairs %>%
+  filter(word1 != "library", word2 != "library") %>%
+  group_by(language, word1, word2) %>%
+  summarize(lang_count = n()) %>%
+  group_by(word1, word2) %>%
+  mutate(n = sum(lang_count)) %>%
+  filter(n >= 5) %>%
+  slice_max(lang_count, n = 1) %>%
+  ungroup() %>%
   select(-lang_count)
 ```
 
@@ -157,10 +157,10 @@ We now plot the pairs graph.  We throw out some languages to make the colors mor
 library(igraph)
 library(ggraph)
 
-pairs_count |>
-  filter(n >= 59) |>
-  relocate(language, .after = word2) |>
-  graph_from_data_frame() |>
+pairs_count %>%
+  filter(n >= 59) %>%
+  relocate(language, .after = word2) %>%
+  graph_from_data_frame() %>%
   ggraph(layout = "fr") +
   geom_edge_link(aes(color = language)) +
   geom_node_point() +
@@ -170,33 +170,33 @@ pairs_count |>
 # Dimension reduction
 
 ```{r}
-master_rec <- recipe(language ~ description + nwords, data = word_count) |>
-  step_filter(nwords >= 2, skip = TRUE) |>
-  step_rm(nwords) |>
-  step_tokenize(description) |>
-  step_stopwords(description) |>
-  step_tokenfilter(description, max_tokens = 300) |>
+master_rec <- recipe(language ~ description + nwords, data = word_count) %>%
+  step_filter(nwords >= 2, skip = TRUE) %>%
+  step_rm(nwords) %>%
+  step_tokenize(description) %>%
+  step_stopwords(description) %>%
+  step_tokenfilter(description, max_tokens = 300) %>%
   step_tfidf(description)
 ```
 
 ```{r}
-prepped_df <- master_rec |>
-  prep() |>
-  juice() |>
-  add_count(across(where(is.numeric))) |>
+prepped_df <- master_rec %>%
+  prep() %>%
+  juice() %>%
+  add_count(across(where(is.numeric))) %>%
   filter(n == 1)
 ```
 
 PCA plot
 
 ```{r}
-pca_df <- prepped_df |>
-  select(-language, -n) |>
+pca_df <- prepped_df %>%
+  select(-language, -n) %>%
   prcomp(scale = TRUE, center = TRUE)
 
-pca_df$x |>
-  as_tibble() |>
-  bind_cols(select(prepped_df, language)) |>
+pca_df$x %>%
+  as_tibble() %>%
+  bind_cols(select(prepped_df, language)) %>%
   ggplot(aes(PC1, PC2)) +
   geom_point(aes(color = language), alpha = 0.5) +
   xlim(-4, 8) +
@@ -208,13 +208,13 @@ t-SNE plot
 ```{r}
 library(Rtsne)
 
-tsne <- prepped_df |>
-  select(-language, -n) |>
+tsne <- prepped_df %>%
+  select(-language, -n) %>%
   Rtsne()
 
-tsne$Y |>
-  as_tibble() |>
-  bind_cols(prepped_df |> select(language)) |>
+tsne$Y %>%
+  as_tibble() %>%
+  bind_cols(prepped_df %>% select(language)) %>%
   ggplot(aes(V1, V2)) +
   geom_point(aes(color = language), alpha = 0.5)
 ```
@@ -224,13 +224,13 @@ UMAP plot
 ```{r}
 library(umap)
 
-umap_df <- prepped_df |>
-  select(-language, -n) |>
+umap_df <- prepped_df %>%
+  select(-language, -n) %>%
   umap()
 
-umap_df$layout |>
-  as_tibble() |>
-  bind_cols(select(prepped_df, language)) |>
+umap_df$layout %>%
+  as_tibble() %>%
+  bind_cols(select(prepped_df, language)) %>%
   ggplot(aes(V1, V2)) +
   geom_point(aes(color = language), alpha = 0.5) +
   xlim(-5, 4) +

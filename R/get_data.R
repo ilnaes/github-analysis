@@ -58,7 +58,7 @@ get_repos <- function(lang, n = 1000, stars = 99999, min = 10) {
 }
 
 get_tibble <- function(response) {
-  response |>
+  response %>%
     map(\(x) do.call(tibble, list_modify(x,
       "owner" = x$owner$type,
       "license" = if (is.null(x$license)) {
@@ -72,7 +72,7 @@ get_tibble <- function(response) {
       } else {
         paste(x$permission, collapse = ";")
       },
-    ))) |>
+    ))) %>%
     bind_rows()
 }
 
@@ -82,16 +82,16 @@ num <- c(8000, 8000, 8000, 8000, 4000)
 dfs <- map2(
   languages, num,
   \(x, y)
-  get_tibble(get_repos(x, n = y)) |>
-    distinct(full_name, .keep_all = TRUE) |>
+  get_tibble(get_repos(x, n = y)) %>%
+    distinct(full_name, .keep_all = TRUE) %>%
     mutate(language = x)
 )
 
-dfs |>
-  bind_rows() |>
+dfs %>%
+  bind_rows() %>%
   write_csv(here("data", "raw.csv"))
 
-read_csv(here("data", "raw.csv")) |>
-  select(-ends_with("url"), -node_id, -private, -fork, -disabled, -score, -stargazers_count, -watchers_count, -permissions) |>
-  rename(stars = watchers) |>
+read_csv(here("data", "raw.csv")) %>%
+  select(-ends_with("url"), -node_id, -private, -fork, -disabled, -score, -stargazers_count, -watchers_count, -permissions) %>%
+  rename(stars = watchers) %>%
   write_csv(here("data", "clean.csv"))

@@ -7,7 +7,7 @@ library(stacks)
 library(here)
 library(vip)
 
-# doParallel::registerDoParallel(cores = 3)
+doParallel::registerDoParallel(cores = 3)
 ```
 
 ```{r}
@@ -147,7 +147,7 @@ lin_res <- lin_workflow %>%
     control = control,
     grid = crossing(
       penalty = 10^seq(-7, -1, 0.2),
-      max_tokens = floor(seq(100, 500, length.out = 5))
+      max_tokens = floor(seq(100, 1000, length.out = 5))
     )
   )
 

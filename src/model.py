@@ -1,8 +1,6 @@
 import torch.nn as nn
 from transformers import AutoModelForSequenceClassification, AutoConfig
 
-import cfg
-
 
 class MyModel(nn.Module):
     def __init__(self, config):

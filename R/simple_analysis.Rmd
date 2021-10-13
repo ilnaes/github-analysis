@@ -206,13 +206,13 @@ This will be hard to facet by language since different languages are at differen
 
 ```{r}
 log_df %>%
-  filter(language == "Python") %>%
+  filter(language == "python") %>%
   ggplot(aes(size, open_issues_count)) +
   geom_point(aes(color = stars)) +
   scale_color_gradient2(low = "blue", high = "red", midpoint = 9)
 
 log_df %>%
-  filter(language == "Python") %>%
+  filter(language == "python") %>%
   lm(formula = stars ~ size + open_issues_count) %>%
   summary()
 ```

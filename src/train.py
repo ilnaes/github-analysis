@@ -171,7 +171,7 @@ def run(args, is_debug=False):
             wandb.init(
                 entity="ilnaes",
                 group=group_name,
-                project="readability",
+                project="github_analysis",
                 config=config,
             )
 
@@ -268,13 +268,13 @@ def train(config, fold, model, optimizer, train, val, scheduler):
             f"Epoch {e+1}/{epochs} -- Validation acc: {val_acc}\t Train acc: {avg.avg}"
         )
 
-        # if val is not None and cfg.WANDB:
-        #     wandb.log(
-        #         {
-        #             "train_loss": np.sqrt(avg.avg),
-        #             "val_loss": val_loss,
-        #         }
-        #     )
+        if val is not None and cfg.WANDB:
+            wandb.log(
+                {
+                    "train_acc": avg.avg,
+                    "val_acc": val_acc,
+                }
+            )
 
         if scheduler is not None:
             scheduler.step()
@@ -283,7 +283,7 @@ def train(config, fold, model, optimizer, train, val, scheduler):
             if val_loss < max_loss:
                 patience, max_loss = 0, val_loss
                 torch.save(
-                    model.state_dict(), f"{cfg.MODEL_SAVE_DIR}model_{fold}.pt"
+                    model.state_dict(), f"{cfg.MODEL_SAVE_DIR}/model_{fold}.pt"
                 )
             else:
                 patience += 1

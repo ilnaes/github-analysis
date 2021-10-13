@@ -1,4 +1,8 @@
-```{r}
+```{r, include = FALSE}
+knitr::opts_chunk$set(warning = FALSE)
+```
+
+```{r, message=FALSE}
 library(tidyverse)
 library(tidymodels)
 library(tidytext)
@@ -8,7 +12,7 @@ library(here)
 # doParallel::registerDoParallel(cores = 3)
 ```
 
-```{r}
+```{r, message=FALSE}
 df <- read_csv(here("data", "clean.csv")) %>%
   mutate(
     description = ifelse(is.na(description), "MISSING", description),
@@ -153,7 +157,7 @@ pairs_count <- pairs %>%
 
 We now plot the pairs graph.  We throw out some languages to make the colors more differentiable. 23 was chosen by tuning.
 
-```{r}
+```{r, message=FALSE}
 library(igraph)
 library(ggraph)
 

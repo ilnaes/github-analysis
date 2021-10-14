@@ -20,7 +20,7 @@ def load_model(path):
 
     logging.info("Loading model")
 
-    model = MyModel(config)
+    model = MyModel(config, pretrained=False)
     model.load_state_dict(checkpoint)
 
     return model, AutoTokenizer.from_pretrained(MODEL_NAME)

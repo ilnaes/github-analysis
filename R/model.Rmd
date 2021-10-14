@@ -32,6 +32,12 @@ train <- training(split)
 test <- testing(split)
 folds <- vfold_cv(train, v = 5)
 
+# save indices for python analysis
+split %>%
+  tidy() %>%
+  mutate(Row = Row - 1) %>%
+  write_csv(here("data", "indices.csv"))
+
 mset <- metric_set(mn_log_loss, accuracy)
 control <- control_grid(
   save_workflow = TRUE,

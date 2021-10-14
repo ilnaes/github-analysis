@@ -21,10 +21,10 @@ def load_env():
             os.environ[key] = val
 
 
-def flag_done():
+def flag_done(message):
     time = get_name()
     with open("/content/drive/MyDrive/Google Drive sync/watch/" + time, "w") as f:
-        f.write("done")
+        f.write(message)
 
 
 def get_logger():

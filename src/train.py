@@ -1,7 +1,7 @@
 import argparse
 import pandas as pd
 import numpy as np
-from sklearn.model_selection import KFold
+from sklearn.model_selection import StratifiedShuffleSplit
 
 from sklearn.preprocessing import LabelEncoder
 
@@ -11,9 +11,9 @@ from torch.nn.functional import cross_entropy
 from torch.optim import Adam
 
 from transformers import get_cosine_schedule_with_warmup
+from . import cfg
 
-import cfg
-from utils import (
+from .utils import (
     seed_everything,
     get_logger,
     AverageMeter,
@@ -21,12 +21,11 @@ from utils import (
     load_env,
     flag_done,
 )
-from dataset import MyDataset
-from model import MyModel
+from .dataset import MyDataset
+from .model import MyModel
 
 from tqdm import tqdm
 
-import wandb
 
 logger = get_logger()
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -148,6 +147,7 @@ def run(args, is_debug=False):
     """Trains models via cross-validation"""
     seed_everything(cfg.SEED)
     df = pd.read_csv(cfg.TRAIN_FILE)
+    idx = pd.read_csv(cfg.INDEX_FILE)
     le = LabelEncoder().fit(df["language"])
 
     df["language"] = le.transform(df["language"])
@@ -158,11 +158,14 @@ def run(args, is_debug=False):
 
     # only do one batch on debug
     if is_debug:
-        df = df.iloc[:16]
-        folds = [(1, (list(range(16)), []))]
+        holdout = df.sample(n=16)
+        df = df.sample(n=100, random_state=123)
     else:
-        cvx = KFold(n_splits=cfg.N_FOLDS, shuffle=True, random_state=cfg.SEED)
-        folds = enumerate(cvx.split(df), start=1)
+        holdout = df.iloc[idx.query("Data == 'Assessment'")["Row"]]
+        df = df.iloc[idx.query("Data == 'Analysis'")["Row"]]
+
+    cvx = StratifiedShuffleSplit(n_splits=cfg.N_FOLDS, random_state=cfg.SEED)
+    folds = enumerate(cvx.split(df, df["language"]), start=1)
 
     group_name = get_name()
 
@@ -187,18 +190,23 @@ def run(args, is_debug=False):
             drop_last=not is_debug,
             shuffle=True,
         )
-        valid_loader = (
-            DataLoader(
-                MyDataset(
-                    config,
-                    df["description"].iloc[val_idx],
-                    df["language"].iloc[val_idx],
-                ),
-                batch_size=config["batch_size"],
-                drop_last=False,
-            )
-            if not is_debug
-            else None
+        valid_loader = DataLoader(
+            MyDataset(
+                config,
+                df["description"].iloc[val_idx],
+                df["language"].iloc[val_idx],
+            ),
+            batch_size=config["batch_size"],
+            drop_last=False,
+        )
+        holdout_loader = DataLoader(
+            MyDataset(
+                config,
+                holdout["description"],
+                holdout["language"],
+            ),
+            batch_size=config["batch_size"],
+            drop_last=False,
         )
 
         model = MyModel(config)
@@ -210,6 +218,11 @@ def run(args, is_debug=False):
         )
 
         train(config, fold, model, opt, train_loader, valid_loader, scheduler)
+        _, holdout_acc = eval(model, holdout_loader)
+
+        print(f"Holdout accuracy: {holdout_acc}")
+
+        flag_done(str(holdout_acc))
 
         if not is_debug and cfg.WANDB:
             wandb.join()
@@ -218,7 +231,7 @@ def run(args, is_debug=False):
 def train(config, fold, model, optimizer, train, val, scheduler):
     """Trains model on data"""
     model.train()
-    max_loss = np.inf
+    max_acc = 0
     patience = 0
 
     epochs = config["epochs"] if val is not None else 1000
@@ -258,17 +271,13 @@ def train(config, fold, model, optimizer, train, val, scheduler):
                 }
             )
 
-        # only validate when not debugging
-        if val is not None:
-            val_loss, val_acc = eval(model, val)
-        else:
-            val_loss = "DEBUG"
+        val_loss, val_acc = eval(model, val)
 
         logger.info(
             f"Epoch {e+1}/{epochs} -- Validation acc: {val_acc}\t Train acc: {avg.avg}"
         )
 
-        if val is not None and cfg.WANDB:
+        if cfg.WANDB:
             wandb.log(
                 {
                     "train_acc": avg.avg,
@@ -279,16 +288,18 @@ def train(config, fold, model, optimizer, train, val, scheduler):
         if scheduler is not None:
             scheduler.step()
 
-        if val is not None:
-            if val_loss < max_loss:
-                patience, max_loss = 0, val_loss
+        if val_acc > max_acc:
+            patience, max_acc = 0, val_acc
+
+            if not cfg.DEBUG:
+                logger.info("Saving model!")
                 torch.save(
                     model.state_dict(), f"{cfg.MODEL_SAVE_DIR}/model_{fold}.pt"
                 )
-            else:
-                patience += 1
-                if cfg.PATIENCE != 0 and patience > cfg.PATIENCE:
-                    break
+        else:
+            patience += 1
+            if patience > cfg.PATIENCE:
+                break
 
 
 def eval(model, val):
@@ -349,14 +360,14 @@ def main():
         torch.cuda.empty_cache()
 
     if cfg.WANDB:
+        import wandb
+
         load_env()
 
     parser = setup_parser()
     args = parser.parse_args()
 
     run(args, cfg.DEBUG)
-
-    flag_done()
 
 
 if __name__ == "__main__":

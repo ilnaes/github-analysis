@@ -1,15 +1,21 @@
 import torch.nn as nn
 from transformers import AutoModelForSequenceClassification, AutoConfig
 
+from . import cfg
+
 
 class MyModel(nn.Module):
-    def __init__(self, config):
+    def __init__(self, config, pretrained=True):
         super(MyModel, self).__init__()
         self.config = AutoConfig.from_pretrained(config["model_name"], num_labels=5)
-        self.roberta = AutoModelForSequenceClassification.from_pretrained(
-            config["model_name"],
-            num_labels=5,
-        )
+
+        if pretrained:
+            self.roberta = AutoModelForSequenceClassification.from_pretrained(
+                config["model_name"],
+                num_labels=5,
+            )
+        else:
+            self.roberta = AutoModelForSequenceClassification.from_config(self.config)
 
         # self.high_dropout = nn.Dropout(config["high_dropout"])
         # self.norm = nn.LayerNorm(self.config.hidden_size)

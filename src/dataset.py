@@ -3,7 +3,7 @@ import torch
 from torch.utils.data import Dataset
 from transformers import AutoTokenizer
 
-import cfg
+from . import cfg
 
 
 def process_str(s):

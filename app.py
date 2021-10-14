@@ -10,7 +10,7 @@ from transformers import AutoModelForSequenceClassification, AutoTokenizer
 import matplotlib.pyplot as plt
 import numpy as np
 
-classes = ["c", "java", "js", "python", "r"]
+classes = ["C", "Java", "Javascript", "Python", "R"]
 
 
 @st.cache(allow_output_mutation=True)
@@ -37,18 +37,20 @@ def predict(s):
 
 
 """
-# What language is/should your project written in?
+# What language should your project written in?
 """
 
-x = st.text_area("Input project description")
+x = st.text_area("Input project description (English ASCII descriptions only)")
 
 if x:
     with torch.no_grad():
         logits = predict(x)["logits"].numpy()[0]
+        choice = np.argmax(logits)
         probs = np.exp(logits) / np.exp(logits).sum()
 
         fig = plt.figure()
         ax = fig.add_axes([0, 0, 1, 1])
         ax.barh(classes, probs)
 
+        st.write(f"Your project should be written in {classes[choice]}.")
         st.pyplot(fig)

@@ -13,6 +13,6 @@ RUN conda install -c conda-forge transformers=4.11.2 streamlit matplotlib
 COPY . .
 
 EXPOSE 8501
-# CMD streamlit run --server.port $PORT app.py
-CMD ["streamlit", "run", "app.py"]
+CMD streamlit run --server.port $PORT app.py
+# CMD ["streamlit", "run", "app.py"]
 

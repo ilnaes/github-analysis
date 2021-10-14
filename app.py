@@ -37,7 +37,7 @@ def predict(s):
 
 
 """
-# What language should your project written in?
+# What language should your project be written in?
 """
 
 x = st.text_area("Input project description (English ASCII descriptions only)")

@@ -27,30 +27,41 @@ def load_model(path):
 
 
 model, tokenizer = load_model("outputs/model_1.pt")
+model.eval()
 
 
 def predict(s):
     feed = [" ".join(s.split())]
+    length = [len(s.split())]
     data = tokenizer(feed, return_tensors="pt", padding="max_length", max_length=256)
 
-    return model(input_ids=data["input_ids"], attention_mask=data["attention_mask"])
+    print(data)
+    print(length)
+
+    return model(
+        input_ids=data["input_ids"],
+        attention_mask=data["attention_mask"],
+        lengths=torch.tensor(length),
+    )
 
 
 """
 # What language should your project be written in?
 """
 
-x = st.text_area("Input project description (English ASCII descriptions only)")
+form = st.form(key="input")
+text = form.text_area("Input project description (English ASCII descriptions only)")
+# x = st.text_area("Input project description (English ASCII descriptions only)")
+x = form.form_submit_button("Submit")
 
 if x:
-    with torch.no_grad():
-        logits = predict(x)["logits"].numpy()[0]
-        choice = np.argmax(logits)
-        probs = np.exp(logits) / np.exp(logits).sum()
+    logits = predict(text).numpy()[0]
+    choice = np.argmax(logits)
+    probs = np.exp(logits) / np.exp(logits).sum()
 
-        fig = plt.figure()
-        ax = fig.add_axes([0, 0, 1, 1])
-        ax.barh(classes, probs)
+    fig, ax = plt.subplots()
+    ax.barh(classes, probs)
+    plt.title("Class probability percentages")
 
-        st.write(f"Your project should be written in {classes[choice]}.")
-        st.pyplot(fig)
+    st.write(f"Your project should be written in {classes[choice]}.")
+    st.pyplot(fig)

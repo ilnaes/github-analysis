@@ -1,0 +1,7 @@
+name: gh_analysis
+channels:
+  - conda-forge
+dependencies:
+  - transformers=4.11.2
+  - streamlit=1.0.0
+  - matplotlib=3.4.2

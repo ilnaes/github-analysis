@@ -20,7 +20,7 @@ df <- read_csv(here("data", "clean.csv")) %>%
   )
 ```
 
-We now do a more in-depth analysis of repo descriptions.
+We now do a more in-depth text analysis of repo descriptions.
 
 ```{r}
 word_count <- df %>%
@@ -32,7 +32,7 @@ word_count %>%
   geom_histogram()
 ```
 
-Word count is very skewed.
+The word count distributions is very skewed.
 
 ```{r}
 word_count %>%
@@ -62,7 +62,7 @@ word_count %>%
   facet_wrap(vars(language), scales = "free")
 ```
 
-Not really.
+Doesn't look like it.
 
 ```{r}
 word_count %>%
@@ -100,7 +100,7 @@ word_list %>%
   facet_wrap(vars(language), scales = "free")
 ```
 
-Nothing surprising here.  Note that the pairs (js, ts) and (py, ipynb) are pretty similar, as to be expected.
+These all seem very reasonable.  I didn't know Java was used in Android app development until now.
 
 # Clustering
 
@@ -187,15 +187,17 @@ master_rec <- recipe(language ~ description + nwords, data = word_count) %>%
 prepped_df <- master_rec %>%
   prep() %>%
   juice() %>%
+  distinct() %>%
   add_count(across(where(is.numeric))) %>%
-  filter(n == 1)
+  filter(n == 1) %>% # remove descriptions that have same tf-idf but different languages
+  select(-n)
 ```
 
 PCA plot
 
 ```{r}
 pca_df <- prepped_df %>%
-  select(-language, -n) %>%
+  select(-language) %>%
   prcomp(scale = TRUE, center = TRUE)
 
 pca_df$x %>%
@@ -213,7 +215,7 @@ t-SNE plot
 library(Rtsne)
 
 tsne <- prepped_df %>%
-  select(-language, -n) %>%
+  select(-language) %>%
   Rtsne()
 
 tsne$Y %>%
@@ -229,7 +231,7 @@ UMAP plot
 library(umap)
 
 umap_df <- prepped_df %>%
-  select(-language, -n) %>%
+  select(-language) %>%
   umap()
 
 umap_df$layout %>%

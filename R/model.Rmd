@@ -59,6 +59,7 @@ master_rec <- recipe(language ~ description, data = df) %>%
   step_rm(nwords) %>%
   step_tokenize(description) %>%
   step_stopwords(description) %>%
+  step_stopwords(description, custom_stopword_source = c("r", "java", "javascript", "js", "python", "c")) %>%
   step_tokenfilter(description, max_tokens = tune()) %>%
   step_tfidf(description)
 ```
@@ -153,7 +154,7 @@ lin_res <- lin_workflow %>%
     control = control,
     grid = crossing(
       penalty = 10^seq(-7, -1, 0.2),
-      max_tokens = floor(seq(100, 1000, length.out = 5))
+      max_tokens = floor(seq(200, 1000, length.out = 5))
     )
   )
 
@@ -172,7 +173,7 @@ autoplot(lin_res)
 ```
 
 * best: 0.684
-* max_tokens: 1000 (but 700 looks good enough)
+* max_tokens: 1000
 
 Now evaluate on test set.
 
@@ -208,7 +209,7 @@ final_model %>%
 ### Let's get stacking
 
 ```{r}
-doParallel::registerDoParallel(cores = 1) # need to do this or training hangs for some reason
+doParallel::registerDoParallel(cores = 1)
 
 lang_st <- stacks() %>%
   add_candidates(lin_res) %>%

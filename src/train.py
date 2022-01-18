@@ -63,8 +63,7 @@ def get_optimizer_params(config, model):
             "params": [
                 p
                 for n, p in model.roberta.named_parameters()
-                if not any(nd in n for nd in no_decay)
-                and any(nd in n for nd in group1)
+                if not any(nd in n for nd in no_decay) and any(nd in n for nd in group1)
             ],
             "weight_decay_rate": config["wd"],
             "lr": config["lr"] / 2.6,
@@ -73,8 +72,7 @@ def get_optimizer_params(config, model):
             "params": [
                 p
                 for n, p in model.roberta.named_parameters()
-                if not any(nd in n for nd in no_decay)
-                and any(nd in n for nd in group2)
+                if not any(nd in n for nd in no_decay) and any(nd in n for nd in group2)
             ],
             "weight_decay_rate": config["wd"],
             "lr": config["lr"],
@@ -83,8 +81,7 @@ def get_optimizer_params(config, model):
             "params": [
                 p
                 for n, p in model.roberta.named_parameters()
-                if not any(nd in n for nd in no_decay)
-                and any(nd in n for nd in group3)
+                if not any(nd in n for nd in no_decay) and any(nd in n for nd in group3)
             ],
             "weight_decay_rate": config["wd"],
             "lr": config["lr"] * 2.6,
@@ -102,8 +99,7 @@ def get_optimizer_params(config, model):
             "params": [
                 p
                 for n, p in model.roberta.named_parameters()
-                if any(nd in n for nd in no_decay)
-                and any(nd in n for nd in group1)
+                if any(nd in n for nd in no_decay) and any(nd in n for nd in group1)
             ],
             "weight_decay_rate": 0.0,
             "lr": config["lr"] / 2.6,
@@ -112,8 +108,7 @@ def get_optimizer_params(config, model):
             "params": [
                 p
                 for n, p in model.roberta.named_parameters()
-                if any(nd in n for nd in no_decay)
-                and any(nd in n for nd in group2)
+                if any(nd in n for nd in no_decay) and any(nd in n for nd in group2)
             ],
             "weight_decay_rate": 0.0,
             "lr": config["lr"],
@@ -122,16 +117,13 @@ def get_optimizer_params(config, model):
             "params": [
                 p
                 for n, p in model.roberta.named_parameters()
-                if any(nd in n for nd in no_decay)
-                and any(nd in n for nd in group3)
+                if any(nd in n for nd in no_decay) and any(nd in n for nd in group3)
             ],
             "weight_decay_rate": 0.0,
             "lr": config["lr"] * 2.6,
         },
         {
-            "params": [
-                p for n, p in model.named_parameters() if "roberta" not in n
-            ],
+            "params": [p for n, p in model.named_parameters() if "roberta" not in n],
             "lr": config["head_lr"],
             "momentum": 0.99,
         },
@@ -248,17 +240,17 @@ def train(config, fold, model, optimizer, train, val, scheduler):
             ids = data["input_ids"]
             masks = data["masks"]
             target = data["target"]
+            lengths = data["lengths"]
 
             ids = ids.to(device, dtype=torch.long)
             masks = masks.to(device, dtype=torch.long)
             target = target.to(device, dtype=torch.long)
+            lengths = lengths.to(device, dtype=torch.long)
 
-            preds = model(input_ids=ids, attention_mask=masks)
-            loss = loss_fcn(preds.logits, target)
+            preds = model(input_ids=ids, attention_mask=masks, lengths=lengths)
+            loss = loss_fcn(preds, target)
 
-            acc = torch.mean(
-                (torch.argmax(preds.logits, dim=1) == target).float()
-            )
+            acc = torch.mean((torch.argmax(preds, dim=1) == target).float())
             avg.update(acc.detach().cpu().numpy())
 
             loss.backward()
@@ -293,9 +285,7 @@ def train(config, fold, model, optimizer, train, val, scheduler):
 
             if not cfg.DEBUG:
                 logger.info("Saving model!")
-                torch.save(
-                    model.state_dict(), f"{cfg.MODEL_SAVE_DIR}/model_{fold}.pt"
-                )
+                torch.save(model.state_dict(), f"{cfg.MODEL_SAVE_DIR}/model_{fold}.pt")
         else:
             patience += 1
             if patience > cfg.PATIENCE:
@@ -315,17 +305,17 @@ def eval(model, val):
             ids = data["input_ids"]
             masks = data["masks"]
             target = data["target"]
+            lengths = data["lengths"]
 
             ids = ids.to(device, dtype=torch.long)
             masks = masks.to(device, dtype=torch.long)
             target = target.to(device, dtype=torch.long)
+            lengths = lengths.to(device, dtype=torch.long)
 
-            preds = model(input_ids=ids, attention_mask=masks)
-            loss = loss_fcn(preds.logits, target)
+            preds = model(input_ids=ids, attention_mask=masks, lengths=lengths)
+            loss = loss_fcn(preds, target)
 
-            acc = torch.mean(
-                (torch.argmax(preds.logits, dim=1) == target).float()
-            )
+            acc = torch.mean((torch.argmax(preds, dim=1) == target).float())
             avg.update(acc.detach().cpu().numpy())
             # avg.update(loss.detach().cpu().numpy())
 

@@ -17,26 +17,25 @@ library(here)
 df <- read_csv(here("data", "clean.csv"))
 ```
 
-Fields of interest:
+The fields we will be interested in:
 
-* owner
 * created_at
 * language
 * size
 * license
 * stars
 * open_issues_count
-* has_*
+* has_
 
-Description will have its own analysis.
+The description will have its own analysis.
 
 All analyses should be faceted by language.
 
 ## Univariates
 
-Let's look at stars
+Let's first look at repo stars.
 
-```{r, }
+```{r}
 df %>%
   ggplot(aes(stars)) +
   geom_density() +
@@ -44,7 +43,7 @@ df %>%
   facet_wrap(vars(language), scales = "free")
 ```
 
-Very skewed.  Even log transform looks skewed.  Javascript is weird as it has a less defined peak.
+The stars distributions are very skewed, even after a log transform.  This also makes sense as the majority of projects on Github are not well known.  Javascript is weird as it has a less defined peak.
 
 ```{r}
 df %>%
@@ -53,9 +52,9 @@ df %>%
   geom_boxplot()
 ```
 
-About what you would expect for the Github crowd.  Web friendly languages on top, R on bottom.
+The distribution of stars among the languages is about what you would expect for the Github crowd.  Super general Python and web-friendly Javascript on top, highly specialized R on bottom.
 
-List of the most popular projects (under 100000 stars):
+List of the most popular projects for each language (under 100000 stars):
 
 ```{r}
 df %>%
@@ -64,7 +63,7 @@ df %>%
   select(name, description, language)
 ```
 
-Let's now look at size.
+Let's now look at project size.
 
 ```{r}
 df %>%
@@ -74,13 +73,15 @@ df %>%
   facet_wrap(vars(language), scales = "free")
 ```
 
-Also skewed, but log transform seems to be sufficient.  There is one repo with size 0:
+It is also skewed, but a log transform seems to be sufficient in de-skewing it.
+
+There are repos with size 0:
 
 ```{r}
 df %>% filter(size == 0)
 ```
 
-This is probably an error since nuwa is there.
+Some of these are errors since the repos are clearly there.  The jd-sec-maotai does seem to no longer be there, however.  Very strange. 
 
 Let's look at created_at:
 
@@ -93,18 +94,19 @@ df %>%
   facet_wrap(vars(language), scales = "free_x")
 ```
 
-Nothing much to see where.  Popular projects were created mostly around 2015-2018.
+This looks very reasonable.  Popular projects were created mostly around 2015-2018.  Of course, since our data collection process filtered based on having the most stars, the most natural conclusion isn't that project creations slowed down after 2018 (in fact, I would bet the opposite), but that there hasn't been enough time for the later projects to accumulate enough stars.
+
+Let's turn to the number of open issues.
 
 ```{r}
 df %>%
-  ggplot(aes(log1p(open_issues_count))) +
+  ggplot(aes(open_issues_count)) +
   geom_density() +
+  scale_x_log10() +
   facet_wrap(vars(language), scales = "free")
 ```
 
 R is different from the general programming languages in that they have more projects with less (or 0) issues.
-
-We now log transform stars, size, and open issues for the future:
 
 ```{r}
 log_df <- df %>%
@@ -115,27 +117,33 @@ log_df <- df %>%
   )
 ```
 
-## Now look at variation with stars/popularity
+
+## Now let's look at variation with stars/popularity
 
 First up: size.
 
 ```{r}
-log_df %>%
+df %>%
   ggplot(aes(size, stars)) +
   geom_point() +
+  scale_x_log10() +
+  scale_y_log10() +
   facet_wrap(vars(language), scales = "free")
 ```
 
-Ever so slight positive correlations.
+There is an ever so slight positive correlations.
+
+Let's see what the owner type says about the number of stars.
 
 ```{r}
-log_df %>%
+df %>%
   ggplot(aes(stars)) +
   geom_density(aes(fill = owner), alpha = 0.5) +
+  scale_x_log10() +
   facet_wrap(vars(language), scales = "free")
 ```
 
-Organizations tend to have more stars.  Visually, it looks less pronounced in R.
+Repos with whose owners are organizations tend to have more stars than those with individual owners.  This makes sense as organizations probably can make more expansive projects.  Visually, it looks less pronounced in R, which also makes sense as R is probably the least commercial of all the languages.
 
 ```{r}
 df %>%
@@ -154,14 +162,22 @@ df %>%
 ```{r}
 df %>%
   ggplot(aes(log(size))) +
-  geom_density(aes(fill = owner), alpha = 0.5)
+  geom_density(aes(fill = owner), alpha = 0.5) +
+  facet_wrap(~language, scales = "free")
 ```
+
+As one would expect, organizations have larger projects than users, although this is more muted in R.
+
+## Licenses
 
 Let's now look at licenses.  We will otherize less popular licenses and keep only the top 10.
 
 ```{r}
 lump_lic <- df %>%
-  mutate(license = license %>% fct_lump(n = 10) %>% fct_infreq() %>% fct_rev())
+  mutate(license = license %>%
+    fct_lump(n = 10) %>%
+    fct_infreq() %>%
+    fct_rev())
 
 lump_lic %>%
   group_by(license, owner) %>%
@@ -171,7 +187,7 @@ lump_lic %>%
   geom_col(aes(fill = owner), position = "dodge")
 ```
 
-Users are far more likely to have no license or use MIT and organizations are more likely to use more exotic licenses.
+We see that users are far more likely to have no license or use MIT and organizations are more likely to use more exotic licenses.
 
 ```{r}
 lump_lic %>%

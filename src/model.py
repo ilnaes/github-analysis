@@ -1,5 +1,6 @@
 import torch.nn as nn
-from transformers import AutoModelForSequenceClassification, AutoConfig
+import torch
+from transformers import AutoModel, AutoConfig
 
 from . import cfg
 
@@ -7,23 +8,21 @@ from . import cfg
 class MyModel(nn.Module):
     def __init__(self, config, pretrained=True):
         super(MyModel, self).__init__()
-        self.config = AutoConfig.from_pretrained(config["model_name"], num_labels=5)
+        self.config = AutoConfig.from_pretrained(config["model_name"])
 
         if pretrained:
-            self.roberta = AutoModelForSequenceClassification.from_pretrained(
-                config["model_name"],
-                num_labels=5,
-            )
+            self.roberta = AutoModel.from_pretrained(config["model_name"])
         else:
-            self.roberta = AutoModelForSequenceClassification.from_config(self.config)
+            self.roberta = AutoModel.from_config(self.config)
 
-        # self.high_dropout = nn.Dropout(config["high_dropout"])
-        # self.norm = nn.LayerNorm(self.config.hidden_size)
-        # self.classifier = nn.Linear(self.config.hidden_size, 1)
+        self.pre_classifier = nn.Linear(cfg.HIDDEN_SIZE + 1, cfg.HIDDEN_SIZE + 1)
+        self.classifier = nn.Linear(cfg.HIDDEN_SIZE + 1, cfg.NUM_LABELS)
+        self.dropout = nn.Dropout(cfg.HIGH_DROPOUT)
 
-        # self._init_weights(self.norm)
-        # self._init_weights(self.classifier)
+        for module in [self.pre_classifier, self.classifier, self.dropout]:
+            self._init_weights(module)
 
+    # Copied from transformers.models.bert.modeling_bert.BertPreTrainedModel._init_weights
     def _init_weights(self, module):
         if isinstance(module, nn.Linear):
             module.weight.data.normal_(mean=0.0, std=self.config.initializer_range)
@@ -37,13 +36,21 @@ class MyModel(nn.Module):
             module.bias.data.zero_()
             module.weight.data.fill_(1.0)
 
-    def forward(self, **kwargs):
-        out = self.roberta(**kwargs)
-        # out = self.roberta(**kwargs)["pooler_output"]
-        # out = self.norm(out)
-        # out = self.high_dropout(out)
-        # out = self.classifier(out)
-        return out
+    def forward(self, input_ids, attention_mask, lengths):
+        return_dict = self.config.use_return_dict
+
+        output = self.roberta(input_ids=input_ids, attention_mask=attention_mask)
+        hidden_state = output[0]  # (bs, seq_len, dim)
+        pooled_output = hidden_state[:, 0]  # (bs, dim)
+        pooled_output = torch.cat(
+            [hidden_state[:, 0], lengths.unsqueeze(dim=1)], dim=1
+        )  # (bs, dim+1)
+        pooled_output = self.pre_classifier(pooled_output)  # (bs, dim+1)
+        pooled_output = nn.ReLU()(pooled_output)  # (bs, dim+1)
+        pooled_output = self.dropout(pooled_output)  # (bs, dim+1)
+        logits = self.classifier(pooled_output)  # (bs, num_labels)
+
+        return logits
 
         # mean-max pooling
         # out = torch.stack(

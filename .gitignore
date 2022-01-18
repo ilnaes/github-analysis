@@ -7,6 +7,7 @@
 tags
 
 wandb
+R/model_files
 
 .DS_Store
 __pycache__

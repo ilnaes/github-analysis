@@ -161,6 +161,16 @@ def run(args, is_debug=False):
 
     group_name = get_name()
 
+    holdout_loader = DataLoader(
+        MyDataset(
+            config,
+            holdout["description"],
+            holdout["language"],
+        ),
+        batch_size=config["batch_size"],
+        drop_last=False,
+    )
+
     for fold, (train_idx, val_idx) in folds:
         if not is_debug and cfg.WANDB:
             wandb.init(
@@ -187,15 +197,6 @@ def run(args, is_debug=False):
                 config,
                 df["description"].iloc[val_idx],
                 df["language"].iloc[val_idx],
-            ),
-            batch_size=config["batch_size"],
-            drop_last=False,
-        )
-        holdout_loader = DataLoader(
-            MyDataset(
-                config,
-                holdout["description"],
-                holdout["language"],
             ),
             batch_size=config["batch_size"],
             drop_last=False,

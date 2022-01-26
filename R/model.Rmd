@@ -111,9 +111,11 @@ knn_res %>%
 autoplot(knn_res)
 ```
 
-* Best: 0.528
-* neighbors: 100
-* max_tokens: 125
+* Best: 0.472
+* neighbors: 250
+* max_tokens: 350
+
+0.472 accuracy on a 5-class classifier isn't too bad.
 
 Now evaluate on test set.
 
@@ -127,15 +129,18 @@ preds <- final_model %>%
 
 preds %>%
   with(accuracy_vec(as.factor(language), .pred_class))
+```
 
+Let's look at the accuracy for each language.
+
+```{r}
 preds %>%
   mutate(acc = .pred_class == language) %>%
   group_by(language) %>%
   summarize(mean(acc))
 ```
 
-0.523
-
+Python is the worst performing.  Makes sense given how Python is the second best language at everything.
 
 ### LASSO model and workflow
 
@@ -181,7 +186,7 @@ lin_res %>%
 autoplot(lin_res)
 ```
 
-* best: 0.684
+* best: 0.601
 * max_tokens: 1000
 
 Now evaluate on test set.
@@ -196,16 +201,18 @@ preds <- final_model %>%
 
 preds %>%
   with(accuracy_vec(as.factor(language), .pred_class))
+```
 
+LASSO continues to outperform.
+
+Let's look at how LASSO performs by language.
+
+```{r}
 preds %>%
   mutate(acc = .pred_class == language) %>%
   group_by(language) %>%
   summarize(mean(acc))
 ```
-
-0.67
-
-LASSO continues to outperform.
 
 Let's look at feature importance.
 
@@ -241,7 +248,4 @@ test %>%
   with(accuracy_vec(as.factor(language), .pred_class))
 ```
 
-
-0.66
-
-womp womp
+womp womp.  Barely any improvement.

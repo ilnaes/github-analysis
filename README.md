@@ -2,7 +2,7 @@
 
 Various analysis on the top 8000 (4000 for R) project descriptions on Github of various languages.
 
-We also train various models to predict languages based purely on the project description.  Models include knn and LASSO in R and a transformer (distilroberta) model in Python.  Overall, the transformer model performed best on the holdout set (73% vs 67% from LASSO being next closest).
+We also train various models to predict languages based purely on the project description.  Models include knn and LASSO in R and a transformer (distilroberta) model in Python.  Overall, the transformer model performed best on the holdout set (~67% vs ~59% from LASSO being next closest).
 
 The relevant notebooks are
 

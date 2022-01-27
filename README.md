@@ -4,11 +4,14 @@ Various analysis on the top 8000 (4000 for R) project descriptions on Github of 
 
 We also train various models to predict languages based purely on the project description.  Models include knn and LASSO in R and a transformer (distilroberta) model in Python.  Overall, the transformer model performed best on the holdout set (~67% vs ~59% from LASSO being next closest).
 
-The relevant notebooks are
+The relevant files are
 
-* R/simple_analysis.Rmd ([html](https://ilnaes.github.io/gh-analysis/simple_analysis.nb.html)) - EDA of repo information not including the description
-* R/description_analysis.Rmd ([html](https://ilnaes.github.io/gh-analysis/description_analysis.nb.html))- EDA of repo description
-* R/model.Rmd ([html](https://ilnaes.github.io/gh-analysis/model.html)) - Fitting LASSO, knn models, and stacking
+* R/get_data.R - get data from Github API
+* R/simple_analysis.Rmd ([html notebook](https://ilnaes.github.io/gh-analysis/simple_analysis.nb.html)) - EDA of repo information not including the description
+* R/description_analysis.Rmd ([html notebook](https://ilnaes.github.io/gh-analysis/description_analysis.nb.html))- EDA of repo description
+* R/model.Rmd ([html notebook](https://ilnaes.github.io/gh-analysis/model.html)) - Fitting LASSO, knn models, and stacking
+* app.py - Streamlit app
+* src/\* - package for training Pytorch transformer
 
 You can train the transformer model by running from the base directory
 

@@ -52,23 +52,6 @@ class MyModel(nn.Module):
 
         return logits
 
-        # mean-max pooling
-        # out = torch.stack(
-        #     tuple(out[-i - 1] for i in range(cfg.N_LAST_HIDDEN)), dim=0
-        # )
-        # out_mean = torch.mean(out, dim=0)
-        # out_max, _ = torch.max(out, dim=0)
-        # out = torch.cat((out_mean, out_max), dim=-1)
-
-        # Multisample Dropout: https://arxiv.org/abs/1905.09788
-        # out = torch.mean(
-        #     torch.stack(
-        #         [self.classifier(self.high_dropout(out)) for _ in range(5)],
-        #         dim=0,
-        #     ),
-        #     dim=0,
-        # )
-
     @staticmethod
     def add_to_argparse(parser):
         parser.add_argument("--high_dropout", type=int, default=cfg.HIGH_DROPOUT)

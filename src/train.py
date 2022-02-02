@@ -63,7 +63,8 @@ def get_optimizer_params(config, model):
             "params": [
                 p
                 for n, p in model.roberta.named_parameters()
-                if not any(nd in n for nd in no_decay) and any(nd in n for nd in group1)
+                if not any(nd in n for nd in no_decay)
+                and any(nd in n for nd in group1)
             ],
             "weight_decay_rate": config["wd"],
             "lr": config["lr"] / 2.6,
@@ -72,7 +73,8 @@ def get_optimizer_params(config, model):
             "params": [
                 p
                 for n, p in model.roberta.named_parameters()
-                if not any(nd in n for nd in no_decay) and any(nd in n for nd in group2)
+                if not any(nd in n for nd in no_decay)
+                and any(nd in n for nd in group2)
             ],
             "weight_decay_rate": config["wd"],
             "lr": config["lr"],
@@ -81,7 +83,8 @@ def get_optimizer_params(config, model):
             "params": [
                 p
                 for n, p in model.roberta.named_parameters()
-                if not any(nd in n for nd in no_decay) and any(nd in n for nd in group3)
+                if not any(nd in n for nd in no_decay)
+                and any(nd in n for nd in group3)
             ],
             "weight_decay_rate": config["wd"],
             "lr": config["lr"] * 2.6,
@@ -99,7 +102,8 @@ def get_optimizer_params(config, model):
             "params": [
                 p
                 for n, p in model.roberta.named_parameters()
-                if any(nd in n for nd in no_decay) and any(nd in n for nd in group1)
+                if any(nd in n for nd in no_decay)
+                and any(nd in n for nd in group1)
             ],
             "weight_decay_rate": 0.0,
             "lr": config["lr"] / 2.6,
@@ -108,7 +112,8 @@ def get_optimizer_params(config, model):
             "params": [
                 p
                 for n, p in model.roberta.named_parameters()
-                if any(nd in n for nd in no_decay) and any(nd in n for nd in group2)
+                if any(nd in n for nd in no_decay)
+                and any(nd in n for nd in group2)
             ],
             "weight_decay_rate": 0.0,
             "lr": config["lr"],
@@ -117,13 +122,16 @@ def get_optimizer_params(config, model):
             "params": [
                 p
                 for n, p in model.roberta.named_parameters()
-                if any(nd in n for nd in no_decay) and any(nd in n for nd in group3)
+                if any(nd in n for nd in no_decay)
+                and any(nd in n for nd in group3)
             ],
             "weight_decay_rate": 0.0,
             "lr": config["lr"] * 2.6,
         },
         {
-            "params": [p for n, p in model.named_parameters() if "roberta" not in n],
+            "params": [
+                p for n, p in model.named_parameters() if "roberta" not in n
+            ],
             "lr": config["head_lr"],
             "momentum": 0.99,
         },
@@ -210,7 +218,9 @@ def run(args, is_debug=False):
             opt, num_warmup_steps=0, num_training_steps=8
         )
 
-        train(config, fold, model, opt, train_loader, valid_loader, scheduler)
+        train_log, val_log = train(
+            config, fold, model, opt, train_loader, valid_loader, scheduler
+        )
         _, holdout_acc = eval(model, holdout_loader)
 
         print(f"Holdout accuracy: {holdout_acc}")
@@ -220,6 +230,8 @@ def run(args, is_debug=False):
         if not is_debug and cfg.WANDB:
             wandb.join()
 
+    return train_log, val_log
+
 
 def train(config, fold, model, optimizer, train, val, scheduler):
     """Trains model on data"""
@@ -228,6 +240,9 @@ def train(config, fold, model, optimizer, train, val, scheduler):
     patience = 0
 
     epochs = config["epochs"] if val is not None else 1000
+
+    train_log = []
+    val_log = []
 
     for e in range(epochs):
         logger.info(f"Epoch {e+1}")
@@ -270,6 +285,9 @@ def train(config, fold, model, optimizer, train, val, scheduler):
             f"Epoch {e+1}/{epochs} -- Validation acc: {val_acc}\t Train acc: {avg.avg}"
         )
 
+        train_log.append(avg.avg)
+        val_log.append(val_acc)
+
         if cfg.WANDB:
             wandb.log(
                 {
@@ -286,11 +304,15 @@ def train(config, fold, model, optimizer, train, val, scheduler):
 
             if not cfg.DEBUG:
                 logger.info("Saving model!")
-                torch.save(model.state_dict(), f"{cfg.MODEL_SAVE_DIR}/model_{fold}.pt")
+                torch.save(
+                    model.state_dict(), f"{cfg.MODEL_SAVE_DIR}/model_{fold}.pt"
+                )
         else:
             patience += 1
             if patience > cfg.PATIENCE:
                 break
+
+    return (train_log, val_log)
 
 
 def eval(model, val):

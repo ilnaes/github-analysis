@@ -8,7 +8,7 @@ NUM_LABELS = 5
 MAX_LEN = 256
 
 # Split params
-N_FOLDS = 5
+N_FOLDS = 1 # Colab so not too many folds
 
 # Model
 MODEL_NAME = "distilroberta-base"

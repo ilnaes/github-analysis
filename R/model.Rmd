@@ -3,11 +3,11 @@ library(tidyverse)
 library(tidymodels)
 library(tidytext)
 library(textrecipes)
-library(stacks)
 library(here)
 library(vip)
+library(doParallel)
 
-doParallel::registerDoParallel(cores = 3)
+registerDoParallel(cores = 3)
 ```
 
 ```{r}
@@ -19,10 +19,11 @@ df <- read_csv(here("data", "clean.csv")) %>%
 
 # Modeling
 
-We will try to construct a model that predicts description to a language using tf-idf vectors.  We will use two models:
+We will try to construct a model that predicts description to a language using tf-idf vectors.  We will use three models:
 
 * k-NN model with cosine similarity
 * LASSO
+* XGBoost
 
 ```{r}
 set.seed(54321)
@@ -87,21 +88,26 @@ knn_workflow <- workflow() %>%
 We will tune on number of neighbors and max number of tokens.
 
 ```{r}
-knn_res <- knn_workflow %>%
-  tune_grid(folds,
-    metrics = mset,
-    control = control,
-    grid = crossing(
-      neighbors = floor(seq(50, 250, length.out = 5)),
-      max_tokens = floor(seq(50, 350, length.out = 5)),
-    )
-  )
+knn_path <- here("outputs", "knn_res.rds")
+override <- FALSE
 
-saveRDS(knn_res, here("outputs", "knn_res.rds"))
+if (!file.exists(knn_path) || override) {
+  knn_res <- knn_workflow %>%
+    tune_grid(folds,
+      metrics = mset,
+      control = control,
+      grid = crossing(
+        neighbors = floor(seq(50, 250, length.out = 5)),
+        max_tokens = floor(seq(50, 350, length.out = 5)),
+      )
+    )
+
+  saveRDS(knn_res, knn_path)
+}
 ```
 
 ```{r}
-knn_res <- readRDS(here("outputs", "knn_res.rds"))
+knn_res <- readRDS(knn_path)
 
 knn_res %>%
   collect_metrics() %>%
@@ -162,21 +168,26 @@ lin_workflow <- workflow() %>%
 We will tune over beta penalty and number of tokens.  We can do more tokens than knn because LASSO can handle sparse data.
 
 ```{r}
-lin_res <- lin_workflow %>%
-  tune_grid(folds,
-    metrics = mset,
-    control = control,
-    grid = crossing(
-      penalty = 10^seq(-7, -1, 0.2),
-      max_tokens = floor(seq(200, 1000, length.out = 5))
-    )
-  )
+lin_path <- here("outputs", "lin_res.rds")
+override <- FALSE
 
-saveRDS(lin_res, here("outputs", "lin_res.rds"))
+if (!file.exists(lin_path) || override) {
+  lin_res <- lin_workflow %>%
+    tune_grid(folds,
+      metrics = mset,
+      control = control,
+      grid = crossing(
+        penalty = 10^seq(-7, -1, 0.2),
+        max_tokens = floor(seq(200, 1000, length.out = 5))
+      )
+    )
+
+  saveRDS(lin_res, lin_path)
+}
 ```
 
 ```{r}
-lin_res <- readRDS(here("outputs", "lin_res.rds"))
+lin_res <- readRDS(lin_path)
 
 lin_res %>%
   collect_metrics() %>%
@@ -193,10 +204,12 @@ Now evaluate on test set.
 
 ```{r}
 final_model <- lin_workflow %>%
-  finalize_workflow(select_best(lin_res, metric = "accuracy")) %>%
+  finalize_workflow(select_best(lin_res, metric = "accuracy"))
+
+fitted_model <- final_model %>%
   fit(train)
 
-preds <- final_model %>%
+preds <- fitted_model %>%
   augment(test)
 
 preds %>%
@@ -214,38 +227,159 @@ preds %>%
   summarize(mean(acc))
 ```
 
-Let's look at feature importance.
+### XGBoost model and workflow
 
 ```{r}
-final_model %>%
+xgb_model <- boost_tree(
+  mode = "classification",
+  learn_rate = tune(),
+  trees = tune(),
+  mtry = tune()
+) %>%
+  set_engine("xgboost")
+
+xgb_workflow <- workflow() %>%
+  add_recipe(master_rec) %>%
+  add_model(xgb_model)
+```
+
+We will tune on number of trees, the learning rate, and number of columns sampled at each node.
+
+```{r}
+xgb_path <- here("outputs", "xgb_res.rds")
+override <- FALSE
+
+if (!file.exists(xgb_path) || override) {
+  xgb_res <- xgb_workflow %>%
+    tune_grid(folds,
+      metrics = mset,
+      control = control,
+      grid = crossing(
+        trees = c(200, 400, 600, 800, 1000),
+        learn_rate = 10^seq(-3, -1, length.out = 5),
+        mtry = c(10, 30, 100),
+        max_tokens = floor(seq(250, 1000, length.out = 4))
+      )
+    )
+
+  saveRDS(xgb_res, xgb_path)
+}
+```
+
+```{r}
+xgb_res <- readRDS(xgb_path)
+
+xgb_res %>%
+  collect_metrics() %>%
+  filter(.metric == "accuracy") %>%
+  arrange(-mean)
+```
+
+* best: 0.608
+* learn_rate: 0.1
+* mtry: 100
+* trees: 1000
+* max_tokens: 1000
+
+The autoplot is jumbled, so we manually plot.
+
+```{r}
+xgb_res %>%
+  collect_metrics() %>%
+  filter(.metric == "accuracy") %>%
+  mutate(learn_rate = as.factor(round(learn_rate, digits = 3))) %>%
+  ggplot(aes(x = trees, y = mean, color = learn_rate)) +
+  geom_line() +
+  geom_point() +
+  facet_grid(rows = vars(max_tokens), cols = vars(mtry))
+```
+
+Looks like increasing max_tokens could help a little more.  Increasing mtry seems to improve only the small learning rates models, but probably won't give a large improvement overall.
+
+Now evaluate on test set.
+
+```{r}
+final_model <- xgb_workflow %>%
+  finalize_workflow(select_best(xgb_res, metric = "accuracy"))
+
+fitted_model <- final_model %>%
+  fit(train)
+
+preds <- fitted_model %>%
+  augment(test)
+
+preds %>%
+  with(accuracy_vec(as.factor(language), .pred_class))
+```
+
+This is an incremental improvement over LASSO and is pretty far from the transformer model we will use in the end so we will not further optimize over parameters.
+
+Let's look at the learning curves.  We will subsample sets and evaluate the model.
+
+```{r}
+n <- 4
+p <- (1:n) / n
+grid <- expand.grid(1:nrow(folds), p) %>%
+  as_tibble() %>%
+  rename(fold = Var1, p = Var2)
+
+grid_path <- here("outputs", "grid.rds")
+override <- FALSE
+
+if (!file.exists(grid_path) || override) {
+  err_tot <- foreach(i = 1:nrow(grid)) %dopar% {
+    train_df <- folds$splits[[grid$fold[i]]] %>%
+      analysis() %>%
+      slice_sample(prop = grid$p[i])
+
+    fitted <- final_model %>%
+      fit(train_df)
+
+    error_train <- fitted %>%
+      augment(train_df) %>%
+      with(accuracy_vec(as.factor(language), .pred_class))
+
+    error_val <- fitted %>%
+      augment(assessment(folds$splits[[grid$fold[i]]])) %>%
+      with(accuracy_vec(as.factor(language), .pred_class))
+
+    c(error_train, error_val)
+  }
+
+  res <- grid %>%
+    mutate(
+      train = map_dbl(err_tot, ~ .[1]),
+      val = map_dbl(err_tot, ~ .[2])
+    )
+
+  saveRDS(res, grid_path)
+}
+```
+
+```{r}
+res <- readRDS(grid_path)
+
+res %>%
+  group_by(p) %>%
+  summarize(
+    train = mean(train),
+    val = mean(val)
+  ) %>% 
+  pivot_longer(train:val, names_to = "type", values_to = "score") %>%
+  ggplot(aes(x = p)) +
+  geom_line(aes(y = score, color = type)) +
+  geom_point(aes(y = score, color = type)) +
+  ylim(0, 1)
+```
+
+The curves look like they've asymptoted nicely so gathering more data probably would only make marginal improvements.  There is a decent gap, suggesting overfitting.
+
+Finally, let's look at feature importance.
+
+```{r}
+fitted_model %>%
   extract_fit_engine() %>%
   vip(n = 25)
 ```
 
-List of highly important terms.  A lot of these terms look predictive of the language (django, android, vue) but some are strange (19?).
-
-### Let's get stacking
-
-LASSO and knn are pretty different algorithms, so let's see if combining them might help us improve our model.
-
-```{r}
-doParallel::registerDoParallel(cores = 1)
-
-lang_st <- stacks() %>%
-  add_candidates(lin_res) %>%
-  add_candidates(knn_res)
-
-lang_model <- lang_st %>%
-  blend_predictions() %>%
-  fit_members()
-```
-
-```{r}
-test %>%
-  {
-    \(x) bind_cols(x, predict(lang_model, x))
-  }() %>%
-  with(accuracy_vec(as.factor(language), .pred_class))
-```
-
-womp womp.  Barely any improvement.
+List of highly important terms.  These terms look pretty predictive of the language (android, react, pytorch, etc.).

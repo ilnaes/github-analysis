@@ -9,7 +9,7 @@ The relevant files are
 * R/get_data.R - get data from Github API
 * R/simple_analysis.Rmd ([html notebook](https://ilnaes.github.io/gh-analysis/simple_analysis.nb.html)) - EDA of repo information not including the description
 * R/description_analysis.Rmd ([html notebook](https://ilnaes.github.io/gh-analysis/description_analysis.nb.html))- EDA of repo description
-* R/model.Rmd ([html notebook](https://ilnaes.github.io/gh-analysis/model.html)) - Fitting knn, LASSO, and XGBoost models
+* R/model.Rmd ([html notebook](https://ilnaes.github.io/gh-analysis/model.html)) - Fitting knn, LASSO, and XGBoost models and stacking
 * src/\* - module for training Pytorch transformer
 * train.ipynb - simple Jupyter notebook for training transformer and plotting training curves
 * app.py - Streamlit app

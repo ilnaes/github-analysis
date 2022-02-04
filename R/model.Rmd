@@ -3,6 +3,7 @@ library(tidyverse)
 library(tidymodels)
 library(tidytext)
 library(textrecipes)
+library(stacks)
 library(here)
 library(vip)
 library(doParallel)
@@ -70,7 +71,7 @@ master_rec <- recipe(language ~ description, data = df) %>%
   step_tfidf(description)
 ```
 
-### Model and workflow for k-NN
+### KNN model and workflow
 
 ```{r}
 knn_model <- nearest_neighbor(
@@ -216,7 +217,7 @@ preds %>%
   with(accuracy_vec(as.factor(language), .pred_class))
 ```
 
-LASSO continues to outperform.
+A big improvement over knn.  The unreasonable effectiveness of LASSO.
 
 Let's look at how LASSO performs by language.
 
@@ -226,6 +227,8 @@ preds %>%
   group_by(language) %>%
   summarize(mean(acc))
 ```
+
+Improved across the board markedly improved on the worst performing languages (python and js).
 
 ### XGBoost model and workflow
 
@@ -314,6 +317,17 @@ preds %>%
 
 This is an incremental improvement over LASSO and is pretty far from the transformer model we will use in the end so we will not further optimize over parameters.
 
+How is it doing by class?
+
+```{r}
+preds %>%
+  mutate(acc = .pred_class == language) %>%
+  group_by(language) %>%
+  summarize(mean(acc))
+```
+
+Pretty similar to LASSO.
+
 Let's look at the learning curves.  We will subsample sets and evaluate the model.
 
 ```{r}
@@ -364,7 +378,7 @@ res %>%
   summarize(
     train = mean(train),
     val = mean(val)
-  ) %>% 
+  ) %>%
   pivot_longer(train:val, names_to = "type", values_to = "score") %>%
   ggplot(aes(x = p)) +
   geom_line(aes(y = score, color = type)) +
@@ -383,3 +397,45 @@ fitted_model %>%
 ```
 
 List of highly important terms.  These terms look pretty predictive of the language (android, react, pytorch, etc.).
+
+### Let's get stacking
+
+All the models are pretty different, so let's see if combining them might help us improve our model.
+
+We first collect just the best models of each to make this not be too slow.
+
+```{r}
+knn_cand <- knn_res %>%
+  filter_parameters(parameters = select_best(knn_res, metric = "accuracy"))
+lin_cand <- lin_res %>%
+  filter_parameters(parameters = select_best(lin_res, metric = "accuracy"))
+xgb_cand <- xgb_res %>%
+  filter_parameters(parameters = select_best(xgb_res, metric = "accuracy"))
+```
+
+Now fit on the stacking members.
+
+```{r}
+registerDoParallel(cores = 1)
+
+lang_st <- stacks() %>%
+  add_candidates(lin_cand) %>%
+  add_candidates(knn_cand) %>%
+  add_candidates(xgb_cand)
+
+lang_model <- lang_st %>%
+  blend_predictions() %>%
+  fit_members()
+```
+
+Finally, test on holdout.
+
+```{r}
+test %>%
+  {
+    \(x) bind_cols(x, predict(lang_model, x))
+  }() %>%
+  with(accuracy_vec(as.factor(language), .pred_class))
+```
+
+womp womp.  Another barely incremental improvement.

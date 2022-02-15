@@ -25,7 +25,10 @@ class MyDataset(Dataset):
 
         # let's making this more interesting
         # excerpts = [" ".join(x.split()) for x in data]
-        excerpts = [" ".join([x for x in s.split() if x.lower() not in classes]) for s in data]
+        excerpts = [
+            " ".join([x if x.lower() not in classes else "<unk>" for x in s.split()])
+            for s in data
+        ]
         self.lengths = np.array([len(x.split()) for x in data])
         self.max_len = max(self.lengths)
 
